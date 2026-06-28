@@ -11,6 +11,7 @@ const COZE_BOT_ID = process.env.COZE_BOT_ID || "7653375037604380691";
 const COZE_BASE = "https://api.coze.cn";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "";
+const PGSSLMODE = process.env.PGSSLMODE || "";
 
 app.use(express.json({ limit: "300kb" }));
 app.use(cors({
@@ -29,9 +30,23 @@ const knowledge = [
   { intent: "发票咨询", keywords: ["发票", "开票", "抬头"], answer: "你可以在订单详情页申请电子发票。通常会在申请后 24 小时内发送到订单绑定邮箱。", source: "订单服务指南" }
 ];
 
+function normalizeDatabaseUrl(databaseUrl) {
+  if (!databaseUrl) return "";
+  try {
+    const parsed = new URL(databaseUrl);
+    parsed.searchParams.delete("sslmode");
+    parsed.searchParams.delete("sslcert");
+    parsed.searchParams.delete("sslkey");
+    parsed.searchParams.delete("sslrootcert");
+    return parsed.toString();
+  } catch {
+    return databaseUrl;
+  }
+}
+
 const pool = DATABASE_URL ? new Pool({
-  connectionString: DATABASE_URL,
-  ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false }
+  connectionString: normalizeDatabaseUrl(DATABASE_URL),
+  ssl: PGSSLMODE === "disable" ? false : { rejectUnauthorized: false }
 }) : null;
 
 const memory = {
