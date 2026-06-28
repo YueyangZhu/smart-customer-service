@@ -101,6 +101,10 @@ create table if not exists public.knowledge_gaps (
   updated_at timestamptz not null default now()
 );
 
+alter table public.messages add column if not exists order_no text;
+alter table public.messages add column if not exists need_handoff boolean;
+alter table public.messages add column if not exists handoff_reason text;
+
 create index if not exists messages_session_created_idx on public.messages(session_id, created_at);
 create index if not exists tickets_created_idx on public.tickets(created_at desc);
 create index if not exists tickets_status_priority_idx on public.tickets(status, priority);
