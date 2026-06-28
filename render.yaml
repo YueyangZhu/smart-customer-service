@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: smart-customer-service-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false
+      - key: COZE_API_TOKEN
+        sync: false
+      - key: COZE_BOT_ID
+        value: "7653375037604380691"
+      - key: FRONTEND_ORIGIN
+        value: https://smart-customer-service-web.onrender.com
+
+  - type: web
+    name: smart-customer-service-web
+    runtime: static
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: VITE_API_BASE
+        value: https://smart-customer-service-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

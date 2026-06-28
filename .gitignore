@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tmp/
+*.zip
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+~$*

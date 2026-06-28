@@ -1,0 +1,141 @@
+{
+  "generatedAt": "2026-06-21T14:11:37.314Z",
+  "total": 11,
+  "passed": 11,
+  "failed": 0,
+  "passRate": "100%",
+  "results": [
+    {
+      "id": "E05",
+      "question": "订单od20260620001到哪了",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "物流查询",
+      "actualAction": "query_order",
+      "confidence": 0.94,
+      "durationMs": 19077,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "L03",
+      "question": "订单 OD20260620001 什么时候送到？",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "物流查询",
+      "actualAction": "query_order",
+      "confidence": 0.94,
+      "durationMs": 9687,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "L06",
+      "question": "订单 OD20260699999 到哪了？",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "物流查询",
+      "actualAction": "query_order",
+      "confidence": 0.94,
+      "durationMs": 18090,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "P09",
+      "question": "已经拆封的贴身用品能退吗？",
+      "intent": "商品与政策咨询",
+      "action": "search_knowledge",
+      "actualIntent": "商品与政策咨询",
+      "actualAction": "search_knowledge",
+      "confidence": 0.91,
+      "durationMs": 8541,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "P10",
+      "question": "收到破损商品应该怎么处理？",
+      "intent": "商品与政策咨询",
+      "action": "search_knowledge",
+      "actualIntent": "商品与政策咨询",
+      "actualAction": "search_knowledge",
+      "confidence": 0.91,
+      "durationMs": 26129,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "R05",
+      "question": "退的钱多久到账？",
+      "intent": "退款进度",
+      "action": "query_refund",
+      "actualIntent": "退款进度",
+      "actualAction": "query_refund",
+      "confidence": 0.93,
+      "durationMs": 16721,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "H04",
+      "question": "这个处理结果我很生气",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "投诉与人工服务",
+      "actualAction": "create_ticket",
+      "confidence": 0.96,
+      "durationMs": 36926,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "H05",
+      "question": "我要申请赔偿",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "投诉与人工服务",
+      "actualAction": "create_ticket",
+      "confidence": 0.96,
+      "durationMs": 31657,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "H06",
+      "question": "再不给我解决我就给差评",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "投诉与人工服务",
+      "actualAction": "create_ticket",
+      "confidence": 0.96,
+      "durationMs": 26559,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "U01",
+      "question": "会员生日礼物怎么领取？",
+      "intent": "未知问题",
+      "action": "create_ticket",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 17332,
+      "passed": true,
+      "error": ""
+    },
+    {
+      "id": "U02",
+      "question": "你们线下门店在哪里？",
+      "intent": "未知问题",
+      "action": "create_ticket",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 18029,
+      "passed": true,
+      "error": ""
+    }
+  ]
+}

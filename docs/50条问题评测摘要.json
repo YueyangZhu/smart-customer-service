@@ -1,0 +1,141 @@
+{
+  "generatedAt": "2026-06-21T13:33:07.256Z",
+  "total": 50,
+  "passed": 39,
+  "failed": 11,
+  "passRate": "78%",
+  "failures": [
+    {
+      "id": "E05",
+      "question": "订单od20260620001到哪了",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 26324,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "H04",
+      "question": "这个处理结果我很生气",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "",
+      "actualAction": "",
+      "confidence": "",
+      "durationMs": 32897,
+      "passed": false,
+      "error": "30 秒内未完成"
+    },
+    {
+      "id": "H05",
+      "question": "我要申请赔偿",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "",
+      "actualAction": "",
+      "confidence": "",
+      "durationMs": 582,
+      "passed": false,
+      "error": "Conversation occupied: Another chat is currently active. Please wait for the ongoing chat to complete or create a new conversation to start a separate chat. Ensure only one chat runs at a time within the same conversation."
+    },
+    {
+      "id": "H06",
+      "question": "再不给我解决我就给差评",
+      "intent": "投诉与人工服务",
+      "action": "create_ticket",
+      "actualIntent": "",
+      "actualAction": "",
+      "confidence": "",
+      "durationMs": 251,
+      "passed": false,
+      "error": "Conversation occupied: Another chat is currently active. Please wait for the ongoing chat to complete or create a new conversation to start a separate chat. Ensure only one chat runs at a time within the same conversation."
+    },
+    {
+      "id": "L03",
+      "question": "订单 OD20260620001 什么时候送到？",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 24036,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "L06",
+      "question": "订单 OD20260699999 到哪了？",
+      "intent": "物流查询",
+      "action": "query_order",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 29188,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "P09",
+      "question": "已经拆封的贴身用品能退吗？",
+      "intent": "商品与政策咨询",
+      "action": "search_knowledge",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 8364,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "P10",
+      "question": "收到破损商品应该怎么处理？",
+      "intent": "商品与政策咨询",
+      "action": "search_knowledge",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 18687,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "R05",
+      "question": "退的钱多久到账？",
+      "intent": "退款进度",
+      "action": "query_refund",
+      "actualIntent": "未知问题",
+      "actualAction": "create_ticket",
+      "confidence": 0.38,
+      "durationMs": 8179,
+      "passed": false,
+      "error": ""
+    },
+    {
+      "id": "U01",
+      "question": "会员生日礼物怎么领取？",
+      "intent": "未知问题",
+      "action": "create_ticket",
+      "actualIntent": "",
+      "actualAction": "",
+      "confidence": "",
+      "durationMs": 220,
+      "passed": false,
+      "error": "Conversation occupied: Another chat is currently active. Please wait for the ongoing chat to complete or create a new conversation to start a separate chat. Ensure only one chat runs at a time within the same conversation."
+    },
+    {
+      "id": "U02",
+      "question": "你们线下门店在哪里？",
+      "intent": "未知问题",
+      "action": "create_ticket",
+      "actualIntent": "",
+      "actualAction": "",
+      "confidence": "",
+      "durationMs": 243,
+      "passed": false,
+      "error": "Conversation occupied: Another chat is currently active. Please wait for the ongoing chat to complete or create a new conversation to start a separate chat. Ensure only one chat runs at a time within the same conversation."
+    }
+  ]
+}

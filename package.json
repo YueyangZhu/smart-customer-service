@@ -1,0 +1,29 @@
+{
+  "name": "smart-customer-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite",
+    "dev:api": "node --watch server/index.mjs",
+    "start": "node server/index.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node tests/api-smoke.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "latest",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "pg": "^8.16.3",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {}
+}
