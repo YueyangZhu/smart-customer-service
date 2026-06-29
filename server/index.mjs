@@ -25,7 +25,7 @@ const seedOrders = [
 ];
 
 const knowledge = [
-  { intent: "商品与政策咨询", keywords: ["退货", "七天", "7天", "无理由", "签收后几天"], answer: "符合条件的商品，在签收后 7 天内可以申请无理由退货。商品、配件、赠品和包装需保持完整，且不能影响二次销售。定制商品、已拆封的贴身用品、虚拟商品及页面明确标注不支持退货的商品不适用。", source: "言析电商售后知识库" },
+  { intent: "商品与政策咨询", keywords: ["退货", "七天", "7天", "无理由", "签收后几天", "拆封", "贴身用品", "能退吗"], answer: "符合条件的商品，在签收后 7 天内可以申请无理由退货。商品、配件、赠品和包装需保持完整，且不能影响二次销售。定制商品、已拆封的贴身用品、虚拟商品及页面明确标注不支持退货的商品不适用。", source: "言析电商售后知识库" },
   { intent: "换货政策", keywords: ["换货", "换一个", "换新", "破损", "损坏"], answer: "商品存在破损、功能故障、缺件或与页面描述明显不符时，可以申请售后处理。建议提交订单号、问题描述和相关照片，审核后会提供退货或换货方案。", source: "言析电商售后知识库" },
   { intent: "发票咨询", keywords: ["发票", "开票", "抬头"], answer: "你可以在订单详情页申请电子发票。通常会在申请后 24 小时内发送到订单绑定邮箱。", source: "订单服务指南" }
 ];
@@ -164,6 +164,10 @@ const store = {
     memory.refunds.push({ ...refund });
     return refund;
   },
+  async getRefundByOrder(orderNo) {
+    if (pool) return (await query("select * from refunds where order_no = $1 order by created_at desc limit 1", [orderNo]))[0] || null;
+    return memory.refunds.filter((refund) => refund.orderNo === orderNo).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+  },
   async addRating(rating) {
     if (pool) return insert("ratings", rating);
     memory.ratings.push({ ...rating });
@@ -260,7 +264,7 @@ async function addMessage(sessionId, role, content, extra = {}) {
 function understand(text) {
   const orderNo = findOrderNo(text);
   if (/投诉|太离谱|骗人|生气|差评|人工|金额不对|赔偿/.test(text)) return { intent: "投诉与人工服务", confidence: .96, action: "create_ticket", orderNo, source: "风险策略", needHandoff: true, handoffReason: "用户投诉、要求人工或涉及金额争议", riskLevel: "high" };
-  if (/(退款|退钱|退的钱怎么).*(进度|到账|到哪|多久|什么时候|审核|处理)|((进度|到账|到哪|多久|什么时候|审核).*(退款|退钱))/.test(text)) return { intent: "退款进度", confidence: .93, action: "query_refund", orderNo, source: "退款系统", needHandoff: false, handoffReason: "", riskLevel: "medium" };
+  if (/(退款|退钱|退的钱|退的钱怎么).*(进度|状态|到账|退回|到哪|多久|什么时候|审核|处理)|((进度|状态|到账|退回|到哪|多久|什么时候|审核|处理).*(退款|退钱|退的钱))/.test(text)) return { intent: "退款进度", confidence: .93, action: "query_refund", orderNo, source: "退款系统", needHandoff: false, handoffReason: "", riskLevel: "medium" };
   if (/申请退款|我要退款|退款申请|退货退款|申请退货|我要退货|退货申请|退一下|退回去/.test(text)) return { intent: "退货退款申请", confidence: .92, action: "show_refund_form", orderNo, source: "售后规则", needHandoff: false, handoffReason: "", riskLevel: "medium" };
   if (/物流|快递|到哪里|到哪了|没到|发货|送到|送达|预计到达/.test(text)) return { intent: "物流查询", confidence: .94, action: "query_order", orderNo, source: "订单系统", needHandoff: false, handoffReason: "", riskLevel: "low" };
   const hit = knowledge.map((item) => ({ item, score: item.keywords.filter((key) => text.includes(key)).length })).sort((a, b) => b.score - a.score)[0];
@@ -399,8 +403,11 @@ app.post("/api/chat", async (req, res, next) => {
       try { aiAnswer = await askCoze(session, text); } catch (error) { console.warn("Coze fallback:", error.message); }
     }
     const answer = await businessAnswer(result, aiAnswer);
-    await addMessage(sessionId, "assistant", answer, result);
-    if (result.needHandoff && !session.ticketId) await createTicket(session, result, text);
+    if (result.needHandoff && !session.ticketId) {
+      await createTicket(session, result, text);
+    } else {
+      await addMessage(sessionId, "assistant", answer, result);
+    }
     if (result.intent === "未知问题") await store.upsertKnowledgeGap(text);
     res.json({ session: await store.getSession(sessionId), messages: await store.listMessages(sessionId), decision: result });
   } catch (error) { next(error); }
@@ -410,12 +417,17 @@ app.post("/api/refunds", async (req, res, next) => {
   try {
     const { sessionId, orderNo, reason } = req.body || {};
     const [session, order] = await Promise.all([store.getSession(sessionId), store.getOrder(orderNo)]);
-    if (!session || !order || !reason) return res.status(400).json({ message: "请完整填写退款信息" });
-    if (!order.refundable) return res.status(409).json({ message: "该订单当前不可重复申请退款" });
+    if (!session || !reason) return res.status(400).json({ message: "请完整填写退款信息" });
+    if (!order) return res.status(400).json({ message: "没有查到这个订单，请检查订单号是否完整" });
+    if (session.status === "closed") return res.status(409).json({ message: "本次服务已结束，请新建会话后再提交售后申请" });
+    if (["waiting_agent", "processing", "open"].includes(session.status) || session.ticketId) return res.status(409).json({ message: "当前会话已转人工，请把退款诉求补充给客服处理" });
+    const existingRefund = await store.getRefundByOrder(order.id);
+    if (!order.refundable || existingRefund) return res.status(409).json({ message: "该订单当前不可重复申请退款" });
     const refund = await store.addRefund({ id: id("RF"), sessionId, orderNo: order.id, reason, status: "待审核", createdAt: now(), updatedAt: now() });
-    await store.updateOrder(order.id, { status: "退款审核中" });
-    await addMessage(sessionId, "assistant", `退款申请 ${refund.id} 已提交，审核结果会在当前会话更新。`, { intent: "退款申请", confidence: 1, action: "answer", source: "退款系统", riskLevel: "medium" });
-    res.status(201).json({ refund });
+    await store.updateOrder(order.id, { status: "退款审核中", refund: `退款申请 ${refund.id} 已提交，当前待审核。`, refundable: false });
+    await addMessage(sessionId, "user", `我提交了退款申请：订单 ${order.id}，原因：${reason}。`, { intent: "退款申请", confidence: 1, action: "submit_refund", source: "用户提交", riskLevel: "medium", orderNo: order.id });
+    await addMessage(sessionId, "assistant", `退款申请已提交\n申请单号：${refund.id}\n订单号：${order.id}\n退款原因：${reason}\n当前状态：待审核\n下一步：审核结果会在当前会话更新，请留意后续通知。`, { intent: "退款申请", confidence: 1, action: "refund_submitted", source: "退款系统", riskLevel: "medium", orderNo: order.id });
+    res.status(201).json({ refund, session: await store.getSession(sessionId), messages: await store.listMessages(sessionId) });
   } catch (error) { next(error); }
 });
 

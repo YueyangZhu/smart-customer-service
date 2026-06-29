@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 
-const child = spawn(process.execPath, ["server/index.mjs"], { stdio: "ignore", env: { ...process.env, DATABASE_URL: "", PORT: "8787" } });
-const base = "http://127.0.0.1:8787";
+const port = String(8700 + Math.floor(Math.random() * 1000));
+const child = spawn(process.execPath, ["server/index.mjs"], { stdio: "ignore", env: { ...process.env, DATABASE_URL: "", PORT: port } });
+const base = `http://127.0.0.1:${port}`;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function json(path, options = {}) {
@@ -23,7 +24,16 @@ try {
     method: "POST",
     body: JSON.stringify({ sessionId: created.body.session.id, message: "订单 OD20260620001 到哪里了？" })
   });
+  if (!logistics.body.messages?.some((message) => message.role === "user" && message.content === "订单 OD20260620001 到哪里了？")) throw new Error("物流快捷指令用户消息未保存");
   if (!logistics.body.messages?.some((message) => message.intent === "物流查询")) throw new Error("物流意图测试失败");
+  if (logistics.body.messages?.some((message) => message.content?.includes("正在识别售后意图"))) throw new Error("处理中状态不应写入聊天消息");
+
+  const policy = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, message: "商品签收后几天可以申请无理由退货？" })
+  });
+  if (!policy.body.messages?.some((message) => message.role === "user" && message.content.includes("无理由退货"))) throw new Error("退货规则快捷指令用户消息未保存");
+  if (policy.body.decision?.action !== "search_knowledge") throw new Error("退货规则知识问答测试失败");
 
   const refund = await json("/api/chat", {
     method: "POST",
@@ -36,6 +46,20 @@ try {
     body: JSON.stringify({ sessionId: created.body.session.id, message: "OD20260620001 我要退货" })
   });
   if (returnApply.response.status !== 200 || returnApply.body.decision?.action !== "show_refund_form") throw new Error("退货申请入口测试失败");
+
+  const refundSubmit = await json("/api/refunds", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, orderNo: "OD20260620001", reason: "商品不合适" })
+  });
+  if (refundSubmit.response.status !== 201 || !refundSubmit.body.refund?.id) throw new Error("退款申请提交失败");
+  if (!refundSubmit.body.messages?.some((message) => message.role === "user" && message.action === "submit_refund" && message.content.includes("商品不合适"))) throw new Error("退款申请用户动作未进入会话");
+  if (!refundSubmit.body.messages?.some((message) => message.role === "assistant" && message.action === "refund_submitted" && message.content.includes(refundSubmit.body.refund.id))) throw new Error("退款申请回执未进入会话");
+
+  const duplicateRefund = await json("/api/refunds", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, orderNo: "OD20260620001", reason: "商品质量问题" })
+  });
+  if (duplicateRefund.response.status !== 409) throw new Error("重复退款申请应被拦截");
 
   const handoff = await json("/api/chat", {
     method: "POST",

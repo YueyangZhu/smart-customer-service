@@ -10,7 +10,8 @@
     "start": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/api-smoke.mjs"
+    "test": "node tests/api-smoke.mjs",
+    "test:evaluation": "node tests/evaluation-50.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
