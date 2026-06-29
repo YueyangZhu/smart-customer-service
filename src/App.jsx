@@ -176,7 +176,6 @@ function CustomerPage() {
         {!busyMode && !messages.length && <ServiceState title="可以开始咨询了" text="输入订单号和问题，系统会判断是直接回复、售后申请还是转人工。" />}
         {messages.map((m) => <Message key={m.id} message={m} />)}
         {busyMode === "ai" && <div className="message assistant"><div className="avatar">AI</div><div className="bubble typing">正在识别售后意图<span>•••</span></div></div>}
-        {busyMode === "agent" && <div className="message system sync-message"><div className="avatar">!</div><div className="bubble">正在同步给人工客服，不会触发 AI 自动回复。</div></div>}
       </div>
       {lastAi?.action === "show_refund_form" && !isClosed && !humanMode && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={() => api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); setDecision(decisionFromMessages(d.messages)); })} />}
       {humanMode && <HandoffBanner session={session} />}
@@ -290,18 +289,7 @@ function AgentPage() {
   };
   useEffect(() => { refresh(); const timer = setInterval(refresh, 3000); return () => clearInterval(timer); }, []);
 
-  const priorityCounts = {
-    all: tickets.length,
-    high: tickets.filter((ticket) => ticket.priority === "high").length,
-    normal: tickets.filter((ticket) => ticket.priority !== "high").length
-  };
-  const statusCounts = {
-    all: tickets.length,
-    active: tickets.filter((ticket) => ["open", "processing"].includes(ticket.status)).length,
-    open: tickets.filter((ticket) => ticket.status === "open").length,
-    processing: tickets.filter((ticket) => ticket.status === "processing").length,
-    closed: tickets.filter((ticket) => ticket.status === "closed").length
-  };
+
   const filteredTickets = tickets
     .filter((ticket) => priorityFilter === "all" || (priorityFilter === "normal" ? ticket.priority !== "high" : ticket.priority === priorityFilter))
     .filter((ticket) => statusFilter === "all" || (statusFilter === "active" ? ["open", "processing"].includes(ticket.status) : ticket.status === statusFilter));
@@ -315,14 +303,11 @@ function AgentPage() {
 
   return <main className="workspace">
     <aside className="ticket-sidebar">
-      <div className="desk-heading"><div><p className="eyebrow">HUMAN DESK</p><h1>人工工作台</h1></div><strong>{filteredTickets.length}<small>/ {tickets.length}</small></strong></div>
+      <div className="desk-heading"><div><p className="eyebrow">HUMAN DESK</p><h1>人工工作台</h1><span>当前筛选 {filteredTickets.length} 条</span></div></div>
       {loadError && <div className="sidebar-error">{loadError}</div>}
       <div className="queue-toolbar compact">
-        <label>状态<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="active">未完成 {statusCounts.active}</option><option value="open">待接入 {statusCounts.open}</option><option value="processing">处理中 {statusCounts.processing}</option><option value="closed">已关闭 {statusCounts.closed}</option><option value="all">全部 {statusCounts.all}</option></select></label>
-        <label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部 {priorityCounts.all}</option><option value="high">紧急 {priorityCounts.high}</option><option value="normal">普通 {priorityCounts.normal}</option></select></label>
-      </div>
-      <div className="status-chips">
-        {[["active", "未完成", statusCounts.active], ["open", "待接入", statusCounts.open], ["processing", "处理中", statusCounts.processing], ["closed", "已关闭", statusCounts.closed]].map(([key, label, count]) => <button key={key} className={statusFilter === key ? "active" : ""} onClick={() => setStatusFilter(key)}>{label}<b>{count}</b></button>)}
+        <label>状态<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="active">未完成</option><option value="open">待接入</option><option value="processing">处理中</option><option value="closed">已关闭</option><option value="all">全部</option></select></label>
+        <label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部</option><option value="high">紧急</option><option value="normal">普通</option></select></label>
       </div>
       <div className="ticket-list">{filteredTickets.length ? filteredTickets.map((t) => <button key={t.id} className={selected?.id === t.id ? "selected" : ""} onClick={() => setSelectedId(t.id)}>
         <span className="ticket-card-title"><b>{t.intent}</b><small>{t.id}</small></span>
@@ -332,12 +317,12 @@ function AgentPage() {
       </button>) : <div className="empty-list">当前筛选下没有工单</div>}</div>
     </aside>
     <section className="ticket-detail">{selected ? <>
-      <header><div><p className="eyebrow">TICKET {selected.id}</p><h2>{selected.intent}</h2><div className="detail-badges"><i className={selected.priority}>{priorityLabel(selected.priority)}</i><i className={`ticket-status ${selected.status}`}>{statusLabel(selected.status)}</i></div></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => act(() => api.closeTicket(selected.id))}>关闭工单</button>}</div></header>
+      <header><div className="ticket-title-block"><p className="eyebrow">TICKET {selected.id}</p><div className="ticket-title-row"><h2>{selected.intent}</h2><div className="detail-badges"><i className={selected.priority}>{priorityLabel(selected.priority)}</i><i className={`ticket-status ${selected.status}`}>{statusLabel(selected.status)}</i></div></div></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => act(() => api.closeTicket(selected.id))}>关闭工单</button>}</div></header>
       <div className="ticket-context"><div><small>转人工原因</small><strong>{selected.handoffReason || "需要人工核实"}</strong></div><div><small>优先级</small><strong>{priorityLabel(selected.priority)}</strong></div><div><small>当前状态</small><strong>{statusLabel(selected.status)}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div></div>
-      <section className="summary"><small>AI 会话摘要</small><p>{selected.summary}</p></section>
+      <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
       <div className="timeline">{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
-      <div className={`agent-composer ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "请先在右上角接入会话" : selected.status === "closed" ? "工单已关闭" : "输入人工回复…"} /><div className="composer-footer"><small>{selected.status === "processing" ? "Enter 发送 · Shift+Enter 换行" : "接入会话后才能回复和关闭工单"}</small><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送回复</button></div></div>
+      <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复，Enter 发送…"} /><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送回复</button></div>
     </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
   </main>;
 }
