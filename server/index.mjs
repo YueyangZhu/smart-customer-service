@@ -261,7 +261,7 @@ function understand(text) {
   const orderNo = findOrderNo(text);
   if (/投诉|太离谱|骗人|生气|差评|人工|金额不对|赔偿/.test(text)) return { intent: "投诉与人工服务", confidence: .96, action: "create_ticket", orderNo, source: "风险策略", needHandoff: true, handoffReason: "用户投诉、要求人工或涉及金额争议", riskLevel: "high" };
   if (/(退款|退钱|退的钱怎么).*(进度|到账|到哪|多久|什么时候|审核|处理)|((进度|到账|到哪|多久|什么时候|审核).*(退款|退钱))/.test(text)) return { intent: "退款进度", confidence: .93, action: "query_refund", orderNo, source: "退款系统", needHandoff: false, handoffReason: "", riskLevel: "medium" };
-  if (/申请退款|我要退款|退货退款/.test(text)) return { intent: "退款申请", confidence: .91, action: "show_refund_form", orderNo, source: "售后规则", needHandoff: false, handoffReason: "", riskLevel: "medium" };
+  if (/申请退款|我要退款|退款申请|退货退款|申请退货|我要退货|退货申请|退一下|退回去/.test(text)) return { intent: "退货退款申请", confidence: .92, action: "show_refund_form", orderNo, source: "售后规则", needHandoff: false, handoffReason: "", riskLevel: "medium" };
   if (/物流|快递|到哪里|到哪了|没到|发货|送到|送达|预计到达/.test(text)) return { intent: "物流查询", confidence: .94, action: "query_order", orderNo, source: "订单系统", needHandoff: false, handoffReason: "", riskLevel: "low" };
   const hit = knowledge.map((item) => ({ item, score: item.keywords.filter((key) => text.includes(key)).length })).sort((a, b) => b.score - a.score)[0];
   if (hit?.score) return { intent: hit.item.intent, confidence: Math.min(.95, .78 + hit.score * .07), action: "search_knowledge", orderNo, source: hit.item.source, needHandoff: false, handoffReason: "", riskLevel: "low", answer: hit.item.answer };
@@ -383,6 +383,7 @@ app.post("/api/chat", async (req, res, next) => {
 
     if (["waiting_agent", "processing", "open"].includes(session.status) || session.ticketId) {
       await addMessage(sessionId, "user", text, { intent: "等待人工", confidence: 1, action: "wait_agent", source: "人工客服", riskLevel: "medium" });
+      if (session.ticketId) await store.updateTicket(session.ticketId, { status: session.status === "processing" ? "processing" : "open" });
       return res.json({
         session: await store.getSession(sessionId),
         messages: await store.listMessages(sessionId),
@@ -393,7 +394,10 @@ app.post("/api/chat", async (req, res, next) => {
     await addMessage(sessionId, "user", text);
     const result = understand(text);
     let aiAnswer = "";
-    try { aiAnswer = await askCoze(session, text); } catch (error) { console.warn("Coze fallback:", error.message); }
+    const shouldAskCoze = result.action === "search_knowledge";
+    if (shouldAskCoze) {
+      try { aiAnswer = await askCoze(session, text); } catch (error) { console.warn("Coze fallback:", error.message); }
+    }
     const answer = await businessAnswer(result, aiAnswer);
     await addMessage(sessionId, "assistant", answer, result);
     if (result.needHandoff && !session.ticketId) await createTicket(session, result, text);

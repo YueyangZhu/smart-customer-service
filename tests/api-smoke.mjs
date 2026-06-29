@@ -31,6 +31,12 @@ try {
   });
   if (!refund.body.messages?.some((message) => message.intent === "退款进度")) throw new Error("退款进度测试失败");
 
+  const returnApply = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, message: "OD20260620001 我要退货" })
+  });
+  if (returnApply.response.status !== 200 || returnApply.body.decision?.action !== "show_refund_form") throw new Error("退货申请入口测试失败");
+
   const handoff = await json("/api/chat", {
     method: "POST",
     body: JSON.stringify({ sessionId: created.body.session.id, message: "退款金额不对，我要投诉并转人工" })

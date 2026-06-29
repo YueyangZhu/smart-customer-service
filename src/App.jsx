@@ -3,6 +3,7 @@ import { api } from "./api.js";
 
 const QUICK_PROMPTS = [
   ["物流查询", "我的订单 OD20260620001 到哪里了？"],
+  ["我要退货", "OD20260620001 我要退货"],
   ["退货规则", "商品签收后几天可以申请无理由退货？"],
   ["退款进度", "订单 OD20260618008 的退款什么时候到账？"],
   ["转人工", "退款金额不对，我要投诉并转人工处理"]
@@ -34,117 +35,186 @@ function CustomerPage() {
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [busyMode, setBusyMode] = useState("booting");
   const [ratingOpen, setRatingOpen] = useState(false);
   const [decision, setDecision] = useState(null);
   const listRef = useRef(null);
 
+  const isClosed = session?.status === "closed";
+  const humanMode = isHumanSession(session);
+  const isBusy = Boolean(busyMode);
+  const lastAi = useMemo(() => [...messages].reverse().find((m) => m.role === "assistant"), [messages]);
+  const panelDecision = isClosed ? closedDecision() : humanMode ? humanDecision(session) : (decision || lastAi);
+
   useEffect(() => {
     let cancelled = false;
     async function initializeSession() {
-      const savedId = localStorage.getItem("yanxi_session_id");
-      if (savedId) {
-        try {
-          const data = await api.getSession(savedId);
-          if (data.session.status !== "closed") {
-            if (!cancelled) { setSession(data.session); setMessages(data.messages); setDecision(decisionFromMessages(data.messages)); }
-            return;
+      setBusyMode("booting");
+      try {
+        const savedId = localStorage.getItem("yanxi_session_id");
+        if (savedId) {
+          try {
+            const data = await api.getSession(savedId);
+            if (data.session.status !== "closed") {
+              if (!cancelled) {
+                setSession(data.session);
+                setMessages(data.messages);
+                setDecision(decisionFromMessages(data.messages));
+              }
+              return;
+            }
+            localStorage.removeItem("yanxi_session_id");
+          } catch {
+            localStorage.removeItem("yanxi_session_id");
           }
-        } catch {
-          localStorage.removeItem("yanxi_session_id");
         }
+        const data = await api.createSession();
+        localStorage.setItem("yanxi_session_id", data.session.id);
+        if (!cancelled) {
+          setSession(data.session);
+          setMessages(data.messages);
+          setDecision(decisionFromMessages(data.messages));
+        }
+      } catch (error) {
+        if (!cancelled) setMessages([{ id: "boot-error", role: "system", content: `连接售后服务失败：${error.message}` }]);
+      } finally {
+        if (!cancelled) setBusyMode("");
       }
-      const data = await api.createSession();
-      localStorage.setItem("yanxi_session_id", data.session.id);
-      if (!cancelled) { setSession(data.session); setMessages(data.messages); setDecision(decisionFromMessages(data.messages)); }
     }
     initializeSession();
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!session?.id || session.status === "closed") return;
+    if (!session?.id || session.status === "closed" || busyMode) return;
     const timer = setInterval(async () => {
       const data = await api.getSession(session.id).catch(() => null);
-      if (data) { setSession(data.session); setMessages(data.messages); }
+      if (data) {
+        setSession(data.session);
+        setMessages(data.messages);
+        if (isHumanSession(data.session)) setDecision(humanDecision(data.session));
+      }
     }, 3000);
     return () => clearInterval(timer);
-  }, [session?.id, session?.status]);
+  }, [session?.id, session?.status, busyMode]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, busyMode]);
 
   async function startNewSession() {
-    setLoading(true);
+    setRatingOpen(false);
+    setBusyMode("new_session");
+    setSession(null);
+    setMessages([]);
+    setInput("");
+    setDecision({ phase: "new_session", intent: "正在开启新会话", confidence: null, source: "会话系统", action: "创建服务会话", riskLevel: "" });
     try {
       const data = await api.createSession();
       localStorage.setItem("yanxi_session_id", data.session.id);
-      setSession(data.session); setMessages(data.messages); setDecision(decisionFromMessages(data.messages)); setInput("");
-    } finally { setLoading(false); }
+      setSession(data.session);
+      setMessages(data.messages);
+      setDecision(decisionFromMessages(data.messages));
+    } catch (error) {
+      setMessages([{ id: crypto.randomUUID(), role: "system", content: `新建会话失败：${error.message}` }]);
+    } finally {
+      setBusyMode("");
+    }
   }
 
   async function send(text = input) {
     const value = text.trim();
-    if (!value || !session || loading) return;
+    if (!value || !session || isBusy) return;
     if (session.status === "closed") {
       setMessages((old) => [...old, { id: crypto.randomUUID(), role: "system", content: "本次服务已结束，请新建会话后继续咨询。" }]);
       return;
     }
-    setInput(""); setLoading(true);
-    setDecision({ phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
+
+    const sendToAgent = isHumanSession(session);
+    setInput("");
     setMessages((old) => [...old, { id: crypto.randomUUID(), role: "user", content: value, createdAt: beijingNow() }]);
+    setBusyMode(sendToAgent ? "agent" : "ai");
+    setDecision(sendToAgent ? humanDecision(session) : { phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
+
     try {
-      const data = await api.sendMessage({ sessionId: session.id, message: value }, setDecision);
-      setSession(data.session); setMessages(data.messages);
-      setDecision(decisionFromMessages(data.messages) || decisionFromResult(data.decision));
+      const data = await api.sendMessage(
+        { sessionId: session.id, message: value },
+        (next) => { if (!sendToAgent) setDecision(next); },
+        { mode: sendToAgent ? "agent" : "ai" }
+      );
+      setSession(data.session);
+      setMessages(data.messages);
+      setDecision(sendToAgent ? humanDecision(data.session) : (decisionFromMessages(data.messages) || decisionFromResult(data.decision)));
     } catch (error) {
-      setMessages((old) => [...old, { id: crypto.randomUUID(), role: "system", content: error.message }]);
-    } finally { setLoading(false); }
+      setMessages((old) => [...old, { id: crypto.randomUUID(), role: "system", content: `发送失败：${error.message}` }]);
+    } finally {
+      setBusyMode("");
+    }
   }
 
-  const lastAi = useMemo(() => [...messages].reverse().find((m) => m.role === "assistant"), [messages]);
-  const isClosed = session?.status === "closed";
+  const canType = Boolean(session) && !isClosed && !isBusy;
+  const canUseQuick = canType && !humanMode;
+  const chatSubtitle = humanMode ? "人工正在跟进 · 新消息会进入同一工单" : "AI 优先响应 · 复杂问题转人工接管";
+
   return <main className="customer-layout">
     <section className="intro-panel">
       <p className="eyebrow">AI AFTER-SALES SERVICE</p>
       <h1>售后问题，<br /><em>一句话说清。</em></h1>
       <p className="intro-copy">订单、物流、退换货或投诉，AI 先快速处理；复杂问题会连同当前对话一起交给人工客服。</p>
-      <div className="trust-list"><span>✓ 业务数据可追溯</span><span>✓ 高风险问题转人工</span><span>✓ 全程服务评价</span></div>
-      <div className="session-card"><small>当前会话</small><strong>{session?.id?.slice(-10) || "正在创建"}</strong><span className={`status ${session?.status || "active"}`}>{statusLabel(session?.status)}</span></div>
+      <div className="trust-list"><span>✓ 有订单先查订单</span><span>✓ 高风险问题转人工</span><span>✓ 人工接入后 AI 停止自动回复</span></div>
+      <div className="session-card"><small>当前会话</small><strong>{session?.id?.slice(-10) || statusTitle(busyMode)}</strong><span className={`status ${session?.status || "active"}`}>{statusLabel(session?.status)}</span></div>
     </section>
 
     <section className="chat-card">
       <div className="chat-heading">
-        <div><b>售后服务助手</b><span>AI 优先响应 · 人工随时接管</span></div>
-        <button onClick={() => setRatingOpen(true)}>结束并评价</button>
+        <div><b>售后服务助手</b><span>{chatSubtitle}</span></div>
+        <button disabled={!session || isBusy} onClick={isClosed ? startNewSession : () => setRatingOpen(true)}>{isClosed ? "新建会话" : "结束并评价"}</button>
       </div>
       <div className="message-list" ref={listRef}>
+        {busyMode === "booting" && <ServiceState title="正在连接售后服务" text="系统会自动恢复未完成会话，或为你打开新的服务窗口。" />}
+        {busyMode === "new_session" && <ServiceState title="正在打开新会话" text="新会话会直接加载，不会把旧会话内容带进来。" />}
+        {!busyMode && !messages.length && <ServiceState title="可以开始咨询了" text="输入订单号和问题，系统会判断是直接回复、售后申请还是转人工。" />}
         {messages.map((m) => <Message key={m.id} message={m} />)}
-        {loading && <div className="message assistant"><div className="avatar">AI</div><div className="bubble typing">正在理解你的问题<span>•••</span></div></div>}
+        {busyMode === "ai" && <div className="message assistant"><div className="avatar">AI</div><div className="bubble typing">正在识别售后意图<span>•••</span></div></div>}
+        {busyMode === "agent" && <div className="message system sync-message"><div className="avatar">!</div><div className="bubble">正在同步给人工客服，不会触发 AI 自动回复。</div></div>}
       </div>
-      {lastAi?.action === "show_refund_form" && !isClosed && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={() => api.getSession(session.id).then((d) => setMessages(d.messages))} />}
-      {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>继续咨询请开启一个新的会话。</span><button onClick={startNewSession} disabled={loading}>新建会话</button></div>}
-      <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={isClosed || loading} onClick={() => send(text)}>{label}</button>)}</div>
+      {lastAi?.action === "show_refund_form" && !isClosed && !humanMode && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={() => api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); setDecision(decisionFromMessages(d.messages)); })} />}
+      {humanMode && <HandoffBanner session={session} />}
+      {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>继续咨询请开启一个新的会话。</span><button onClick={startNewSession} disabled={isBusy}>新建会话</button></div>}
+      {!humanMode && <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={!canUseQuick} onClick={() => send(text)}>{label}</button>)}</div>}
       <form className={`composer ${isClosed ? "closed" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <textarea disabled={isClosed} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={isClosed ? "本次服务已结束，请新建会话后继续咨询" : "请描述你的售后问题，可附上订单号…"} rows="2" />
-        <small className="keyboard-hint">{isClosed ? "旧会话已锁定" : "Enter 发送 · Shift+Enter 换行"}</small>
-        <button disabled={isClosed || !input.trim() || loading}>发送</button>
+        <textarea disabled={!canType} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={composerPlaceholder({ isClosed, humanMode, busyMode })} rows="2" />
+        <small className="keyboard-hint">{composerHint({ isClosed, humanMode, busyMode })}</small>
+        <button disabled={!canType || !input.trim()}>{humanMode ? "补充给客服" : "发送"}</button>
       </form>
     </section>
 
     <aside className="decision-panel">
-      <p className="eyebrow">DECISION TRACE</p><h2>AI 决策轨迹</h2>
-      {loading && <div className="decision-progress"><i /><span>{progressLabel(decision?.phase)}</span></div>}
-      <Decision label="识别意图" value={(decision || lastAi)?.intent || "等待提问"} />
-      <Decision label="置信度" value={(decision || lastAi)?.confidence != null ? `${Math.round((decision || lastAi).confidence * 100)}%` : "--"} />
-      <Decision label="信息来源" value={(decision || lastAi)?.source || "--"} />
-      <Decision label="下一动作" value={loading ? ((decision || {}).action || "处理中") : actionLabel((decision || lastAi)?.action)} />
-      <Decision label="风险等级" value={loading ? "评估中" : riskLabel((decision || lastAi)?.riskLevel)} tone={(decision || lastAi)?.riskLevel} />
-      <div className="explain">这里展示 AI 为什么这样回答，以及何时把问题交给人工处理。</div>
+      <p className="eyebrow">DECISION TRACE</p><h2>服务状态</h2>
+      {busyMode === "ai" && <div className="decision-progress"><i /><span>{progressLabel(decision?.phase)}</span></div>}
+      {busyMode === "agent" && <div className="decision-progress agent"><i /><span>正在写入人工工单</span></div>}
+      <Decision label="当前阶段" value={panelDecision?.intent || statusTitle(busyMode)} />
+      <Decision label="置信度" value={panelDecision?.confidence != null ? `${Math.round(panelDecision.confidence * 100)}%` : "--"} />
+      <Decision label="信息来源" value={panelDecision?.source || "--"} />
+      <Decision label="下一动作" value={busyMode === "ai" ? ((decision || {}).action || "处理中") : actionLabel(panelDecision?.action)} />
+      <Decision label="风险等级" value={busyMode === "ai" ? "评估中" : riskLabel(panelDecision?.riskLevel)} tone={panelDecision?.riskLevel} />
+      <div className="explain">人工接入后，用户补充内容只进入同一个工单时间线，不再触发 AI 自动回复。</div>
     </aside>
     {ratingOpen && <RatingModal session={session} onClose={() => setRatingOpen(false)} onSubmitted={() => api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); })} />}
   </main>;
+}
+
+function HandoffBanner({ session }) {
+  const processing = session?.status === "processing";
+  return <div className={`handoff-banner ${processing ? "processing" : "waiting"}`}>
+    <strong>{processing ? "客服已接入" : "已转人工，等待接入"}</strong>
+    <span>{processing ? "你继续发送的内容会同步到当前工单，等待客服继续处理。" : "你可以先补充订单、照片描述或诉求，AI 不会再自动回复。"}</span>
+    {session?.ticketId && <em>工单 {session.ticketId}</em>}
+  </div>;
+}
+
+function ServiceState({ title, text }) {
+  return <div className="service-state"><i /><strong>{title}</strong><span>{text}</span></div>;
 }
 
 function Message({ message }) {
@@ -164,51 +234,114 @@ function RefundCard({ session, orderNo = "", onDone }) {
   const [order, setOrder] = useState(orderNo);
   const [reason, setReason] = useState("商品不合适");
   const [state, setState] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   async function submit() {
-    try { await api.submitRefund({ sessionId: session.id, orderNo: order, reason }); setState("退款申请已提交"); onDone(); }
-    catch (error) { setState(error.message); }
+    if (!order.trim()) { setState("请先填写订单号"); return; }
+    setSubmitting(true);
+    try {
+      await api.submitRefund({ sessionId: session.id, orderNo: order.trim().toUpperCase(), reason });
+      setState("退款申请已提交，处理进度会在当前会话更新。");
+      await onDone?.();
+    } catch (error) {
+      setState(`提交失败：${error.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
-  return <div className="refund-card"><b>退款申请</b><input value={order} onChange={(e) => setOrder(e.target.value)} placeholder="订单号" /><select value={reason} onChange={(e) => setReason(e.target.value)}><option>商品不合适</option><option>商品质量问题</option><option>错发或漏发</option><option>其他原因</option></select><button onClick={submit}>提交申请</button>{state && <small>{state}</small>}</div>;
+  return <div className="refund-card"><b>售后申请</b><input value={order} onChange={(e) => setOrder(e.target.value)} placeholder="订单号" /><select value={reason} onChange={(e) => setReason(e.target.value)}><option>商品不合适</option><option>商品质量问题</option><option>错发或漏发</option><option>其他原因</option></select><button disabled={submitting} onClick={submit}>{submitting ? "提交中" : "提交申请"}</button>{state && <small className={state.startsWith("提交失败") ? "error" : ""}>{state}</small>}</div>;
 }
 
 function RatingModal({ session, onClose, onSubmitted }) {
-  const [score, setScore] = useState(5), [resolved, setResolved] = useState(true), [comment, setComment] = useState(""), [done, setDone] = useState(false);
-  async function submit() { await api.submitRating({ sessionId: session.id, score, resolved, comment }); await onSubmitted?.(); setDone(true); }
+  const [score, setScore] = useState(5), [resolved, setResolved] = useState(true), [comment, setComment] = useState(""), [done, setDone] = useState(false), [submitting, setSubmitting] = useState(false);
+  async function submit() {
+    if (!session || submitting) return;
+    setSubmitting(true);
+    try { await api.submitRating({ sessionId: session.id, score, resolved, comment }); await onSubmitted?.(); setDone(true); }
+    finally { setSubmitting(false); }
+  }
   return <div className="modal-backdrop"><div className="modal">
     {done ? <><div className="success-mark">✓</div><h2>谢谢你的评价</h2><p>反馈会帮助我们改进知识库和服务流程。</p><button className="primary" onClick={onClose}>完成</button></> : <>
       <p className="eyebrow">SERVICE REVIEW</p><h2>这次问题解决了吗？</h2>
       <div className="toggle-row"><button className={resolved ? "selected" : ""} onClick={() => setResolved(true)}>已经解决</button><button className={!resolved ? "selected" : ""} onClick={() => setResolved(false)}>仍未解决</button></div>
       <div className="stars">{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => setScore(n)} className={n <= score ? "on" : ""}>★</button>)}</div>
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="还有什么想告诉我们？" />
-      <div className="modal-actions"><button onClick={onClose}>稍后评价</button><button className="primary" onClick={submit}>提交评价</button></div>
+      <div className="modal-actions"><button onClick={onClose}>稍后评价</button><button className="primary" disabled={submitting} onClick={submit}>{submitting ? "提交中" : "提交评价"}</button></div>
     </>}
   </div></div>;
 }
 
 function AgentPage() {
-  const [tickets, setTickets] = useState([]), [selectedId, setSelectedId] = useState(null), [reply, setReply] = useState("");
+  const [tickets, setTickets] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [reply, setReply] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const refresh = () => api.listTickets().then((d) => { setTickets(d.tickets); setSelectedId((id) => id && d.tickets.some((t) => t.id === id) ? id : d.tickets[0]?.id || null); });
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [loadError, setLoadError] = useState("");
+
+  const refresh = async () => {
+    try {
+      const data = await api.listTickets();
+      setTickets(data.tickets || []);
+      setLoadError("");
+      setSelectedId((id) => id && data.tickets?.some((t) => t.id === id) ? id : data.tickets?.[0]?.id || null);
+    } catch (error) {
+      setLoadError(error.message);
+    }
+  };
   useEffect(() => { refresh(); const timer = setInterval(refresh, 3000); return () => clearInterval(timer); }, []);
-  const priorityCounts = { all: tickets.length, high: tickets.filter((ticket) => ticket.priority === "high").length, normal: tickets.filter((ticket) => ticket.priority === "normal").length };
-  const filteredTickets = tickets.filter((ticket) => priorityFilter === "all" || ticket.priority === priorityFilter);
+
+  const priorityCounts = {
+    all: tickets.length,
+    high: tickets.filter((ticket) => ticket.priority === "high").length,
+    normal: tickets.filter((ticket) => ticket.priority !== "high").length
+  };
+  const statusCounts = {
+    all: tickets.length,
+    active: tickets.filter((ticket) => ["open", "processing"].includes(ticket.status)).length,
+    open: tickets.filter((ticket) => ticket.status === "open").length,
+    processing: tickets.filter((ticket) => ticket.status === "processing").length,
+    closed: tickets.filter((ticket) => ticket.status === "closed").length
+  };
+  const filteredTickets = tickets
+    .filter((ticket) => priorityFilter === "all" || (priorityFilter === "normal" ? ticket.priority !== "high" : ticket.priority === priorityFilter))
+    .filter((ticket) => statusFilter === "all" || (statusFilter === "active" ? ["open", "processing"].includes(ticket.status) : ticket.status === statusFilter));
   const selected = filteredTickets.find((t) => t.id === selectedId) || filteredTickets[0];
+
   async function act(fn) { await fn(); await refresh(); }
-  async function sendReply() { if (!selected || selected.status !== "processing" || !reply.trim()) return; await act(async () => { await api.replyTicket(selected.id, reply); setReply(""); }); }
+  async function sendReply() {
+    if (!selected || selected.status !== "processing" || !reply.trim()) return;
+    await act(async () => { await api.replyTicket(selected.id, reply); setReply(""); });
+  }
+
   return <main className="workspace">
-    <aside className="ticket-sidebar"><p className="eyebrow">HUMAN DESK</p><h1>人工工作台</h1>
-      <div className="queue-toolbar"><div className="queue-tabs"><button className="active">当前 {filteredTickets.length}</button></div><label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部 {priorityCounts.all}</option><option value="high">紧急 {priorityCounts.high}</option><option value="normal">普通 {priorityCounts.normal}</option></select></label></div>
-      <div className="ticket-list">{filteredTickets.map((t) => <button key={t.id} className={selectedId === t.id ? "selected" : ""} onClick={() => setSelectedId(t.id)}><span><b>{t.intent}</b><small>{t.id}</small></span><i className={t.priority}>{t.priority === "high" ? "紧急" : "普通"}</i><p>{t.summary}</p></button>)}</div>
+    <aside className="ticket-sidebar">
+      <div className="desk-heading"><div><p className="eyebrow">HUMAN DESK</p><h1>人工工作台</h1></div><strong>{filteredTickets.length}<small>/ {tickets.length}</small></strong></div>
+      {loadError && <div className="sidebar-error">{loadError}</div>}
+      <div className="queue-toolbar compact">
+        <label>状态<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="active">未完成 {statusCounts.active}</option><option value="open">待接入 {statusCounts.open}</option><option value="processing">处理中 {statusCounts.processing}</option><option value="closed">已关闭 {statusCounts.closed}</option><option value="all">全部 {statusCounts.all}</option></select></label>
+        <label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部 {priorityCounts.all}</option><option value="high">紧急 {priorityCounts.high}</option><option value="normal">普通 {priorityCounts.normal}</option></select></label>
+      </div>
+      <div className="status-chips">
+        {[["active", "未完成", statusCounts.active], ["open", "待接入", statusCounts.open], ["processing", "处理中", statusCounts.processing], ["closed", "已关闭", statusCounts.closed]].map(([key, label, count]) => <button key={key} className={statusFilter === key ? "active" : ""} onClick={() => setStatusFilter(key)}>{label}<b>{count}</b></button>)}
+      </div>
+      <div className="ticket-list">{filteredTickets.length ? filteredTickets.map((t) => <button key={t.id} className={selected?.id === t.id ? "selected" : ""} onClick={() => setSelectedId(t.id)}>
+        <span className="ticket-card-title"><b>{t.intent}</b><small>{t.id}</small></span>
+        <span className="ticket-card-badges"><i className={t.priority}>{priorityLabel(t.priority)}</i><i className={`status-badge ${t.status}`}>{statusLabel(t.status)}</i></span>
+        <p>{t.summary}</p>
+        <em>{formatTime(t.updatedAt || t.createdAt)}</em>
+      </button>) : <div className="empty-list">当前筛选下没有工单</div>}</div>
     </aside>
     <section className="ticket-detail">{selected ? <>
-      <header><div><p className="eyebrow">TICKET {selected.id}</p><h2>{selected.intent}</h2></div><div className="ticket-header-actions"><span className={`ticket-status ${selected.status}`}>{statusLabel(selected.status)}</span>{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => act(() => api.closeTicket(selected.id))}>关闭工单</button>}</div></header>
-      <div className="ticket-context"><div><small>转人工原因</small><strong>{selected.handoffReason}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div><div><small>创建时间</small><strong>{formatTime(selected.createdAt)}</strong></div></div>
+      <header><div><p className="eyebrow">TICKET {selected.id}</p><h2>{selected.intent}</h2><div className="detail-badges"><i className={selected.priority}>{priorityLabel(selected.priority)}</i><i className={`ticket-status ${selected.status}`}>{statusLabel(selected.status)}</i></div></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => act(() => api.closeTicket(selected.id))}>关闭工单</button>}</div></header>
+      <div className="ticket-context"><div><small>转人工原因</small><strong>{selected.handoffReason || "需要人工核实"}</strong></div><div><small>优先级</small><strong>{priorityLabel(selected.priority)}</strong></div><div><small>当前状态</small><strong>{statusLabel(selected.status)}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div></div>
       <section className="summary"><small>AI 会话摘要</small><p>{selected.summary}</p></section>
+      <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
       <div className="timeline">{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
       <div className={`agent-composer ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "请先在右上角接入会话" : selected.status === "closed" ? "工单已关闭" : "输入人工回复…"} /><div className="composer-footer"><small>{selected.status === "processing" ? "Enter 发送 · Shift+Enter 换行" : "接入会话后才能回复和关闭工单"}</small><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送回复</button></div></div>
-    </> : <div className="empty">暂时没有需要人工处理的工单</div>}</section>
+    </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
   </main>;
 }
+
 function AnalyticsPage() {
   const [data, setData] = useState(null);
   const [from, setFrom] = useState(() => beijingDate(-29));
@@ -261,6 +394,16 @@ function beijingNow() {
   const date = new Date(Date.now() + 8 * 3600000);
   return date.toISOString().replace("Z", "+08:00");
 }
+function isHumanSession(session) {
+  return Boolean(session && session.status !== "closed" && (session.ticketId || ["waiting_agent", "processing", "open"].includes(session.status)));
+}
+function humanDecision(session) {
+  const processing = session?.status === "processing";
+  return { intent: processing ? "人工处理中" : "等待人工接入", confidence: 1, source: "人工客服", action: processing ? "等待客服回复" : "等待客服接入", riskLevel: "medium" };
+}
+function closedDecision() {
+  return { intent: "服务已结束", confidence: 1, source: "服务闭环", action: "new_session", riskLevel: "low" };
+}
 function decisionFromMessages(messages = []) {
   const message = [...messages].reverse().find((item) => item.role === "assistant" && item.intent);
   return message ? { intent: message.intent, confidence: message.confidence, source: message.source, action: message.action, riskLevel: message.riskLevel } : null;
@@ -269,8 +412,20 @@ function decisionFromResult(result) {
   return result ? { intent: result.intent, confidence: result.confidence, source: result.source, action: result.action, riskLevel: result.riskLevel } : null;
 }
 function progressLabel(phase) { return ({ submitting: "正在接收并保存问题", understanding: "正在识别意图与风险", routing: "正在匹配知识和业务路径", generating: "正在生成回答", saving: "正在保存处理结果" })[phase] || "正在处理"; }
-
-function statusLabel(status) { return ({ active: "服务中", waiting_agent: "等待人工", open: "待接入", processing: "处理中", closed: "已完成" })[status] || "服务中"; }
-function actionLabel(action) { return ({ answer: "直接回答", search_knowledge: "检索知识", query_order: "查询订单", query_refund: "查询退款", show_refund_form: "展示退款表单", create_ticket: "创建人工工单" })[action] || "--"; }
+function statusTitle(mode) { return ({ booting: "正在连接", new_session: "新会话中", ai: "AI处理中", agent: "同步人工" })[mode] || "正在创建"; }
+function composerPlaceholder({ isClosed, humanMode, busyMode }) {
+  if (isClosed) return "本次服务已结束，请新建会话后继续咨询";
+  if (busyMode === "booting" || busyMode === "new_session") return "正在准备会话…";
+  if (humanMode) return "补充给客服的内容会进入同一个工单…";
+  return "请描述你的售后问题，可附上订单号…";
+}
+function composerHint({ isClosed, humanMode, busyMode }) {
+  if (isClosed) return "旧会话已锁定";
+  if (busyMode) return "请稍等，正在处理当前操作";
+  return humanMode ? "Enter 补充给客服 · AI 不再自动回复" : "Enter 发送 · Shift+Enter 换行";
+}
+function statusLabel(status) { return ({ active: "服务中", waiting_agent: "等待人工", open: "待接入", processing: "处理中", closed: "已关闭" })[status] || "服务中"; }
+function priorityLabel(priority) { return priority === "high" ? "紧急" : "普通"; }
+function actionLabel(action) { return ({ answer: "直接回答", search_knowledge: "检索知识", query_order: "查询订单", query_refund: "查询退款", show_refund_form: "展示售后申请", create_ticket: "创建人工工单", wait_agent: "等待人工处理", new_session: "新建会话" })[action] || action || "--"; }
 function riskLabel(risk) { return ({ low: "低", medium: "中", high: "高" })[risk] || "--"; }
 function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" }) : "--"; }

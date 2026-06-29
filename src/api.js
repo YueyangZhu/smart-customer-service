@@ -12,11 +12,16 @@ async function request(path, options = {}) {
 
 export const api = {
   createSession: () => request("/api/sessions", { method: "POST" }),
-  sendMessage: async (payload, onProgress = () => {}) => {
+  sendMessage: async (payload, onProgress = () => {}, options = {}) => {
+    if (options.mode === "agent") {
+      onProgress({ phase: "saving", intent: "等待人工", confidence: 1, source: "人工客服", action: "同步到工单", riskLevel: "medium" });
+      return request("/api/chat", { method: "POST", body: JSON.stringify(payload) });
+    }
+
     onProgress({ phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     onProgress({ phase: "understanding", intent: "正在识别意图", confidence: null, source: "业务规则 + Coze", action: "分析意图与风险", riskLevel: "" });
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     onProgress({ phase: "generating", intent: "正在生成回复", confidence: null, source: "售后服务 API", action: "组织最终回复", riskLevel: "" });
     const result = await request("/api/chat", { method: "POST", body: JSON.stringify(payload) });
     onProgress({ phase: "saving", intent: "回复已生成", confidence: null, source: "业务系统", action: "保存结果", riskLevel: "" });
