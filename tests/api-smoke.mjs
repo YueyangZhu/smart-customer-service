@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-const child = spawn(process.execPath, ["server/index.mjs"], { stdio: "ignore" });
+const child = spawn(process.execPath, ["server/index.mjs"], { stdio: "ignore", env: { ...process.env, DATABASE_URL: "", PORT: "8787" } });
 const base = "http://127.0.0.1:8787";
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -49,6 +49,24 @@ try {
 
   const reply = await json(`/api/agent/tickets/${ticketId}/reply`, { method: "POST", body: JSON.stringify({ content: "已接入处理" }) });
   if (reply.body.ticket?.status !== "processing") throw new Error("人工回复测试失败");
+
+  const beforeFollowUp = await json(`/api/sessions/${created.body.session.id}`);
+  const beforeFollowUpAssistantCount = beforeFollowUp.body.messages?.filter((message) => message.role === "assistant").length ?? 0;
+  const followUp = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, message: "我刚才补充一下，商品外包装也破损了" })
+  });
+  const afterFollowUpAssistantCount = followUp.body.messages?.filter((message) => message.role === "assistant").length ?? 0;
+  if (followUp.body.decision?.action !== "wait_agent" || afterFollowUpAssistantCount !== beforeFollowUpAssistantCount) throw new Error("人工接入后追问不应触发 AI 回复");
+  if (!followUp.body.messages?.some((message) => message.role === "user" && message.content.includes("外包装"))) throw new Error("人工接入后追问未进入工单时间线");
+
+  const close = await json(`/api/agent/tickets/${ticketId}/close`, { method: "POST" });
+  if (close.body.ticket?.status !== "closed") throw new Error("关闭工单测试失败");
+  const closedFollowUp = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, message: "关闭后我还能继续问吗" })
+  });
+  if (closedFollowUp.response.status !== 409 || !closedFollowUp.body.message?.includes("新建会话")) throw new Error("关闭后旧会话应提示新建会话");
 
   const dashboard = await json("/api/dashboard");
   if (!Array.isArray(dashboard.body.closure)) throw new Error("看板闭环数据测试失败");

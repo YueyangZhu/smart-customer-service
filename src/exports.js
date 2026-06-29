@@ -158,24 +158,81 @@ export async function exportPdf(data, range, raw = {}) {
   await installChineseFont(pdf);
   const green = [11, 114, 88], ink = [20, 33, 43], pale = [241, 245, 243], orange = [232, 151, 78], gray = [207, 217, 212];
   const colors = [green, [111, 171, 151], orange, gray];
+  const pageBottom = 270;
+
+  function ensureSpace(currentY, needed, title = "智能客服运营分析报告（续）") {
+    if (currentY + needed <= pageBottom) return currentY;
+    pdf.addPage();
+    pdf.setFont("SimHei"); pdf.setFillColor(...ink); pdf.rect(0, 0, 210, 24, "F");
+    pdf.setTextColor(255, 255, 255); pdf.setFontSize(15); pdf.text(title, 14, 16);
+    return 38;
+  }
+
+  function sectionTitle(title, y) {
+    y = ensureSpace(y, 12);
+    pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text(title, 12, y);
+    return y + 10;
+  }
+
   pdf.setFillColor(...ink); pdf.roundedRect(12, 12, 186, 36, 5, 5, "F");
   pdf.setTextColor(203, 237, 112); pdf.setFontSize(8); pdf.text("YANXI SERVICE INTELLIGENCE", 20, 23);
-  pdf.setTextColor(255,255,255); pdf.setFontSize(22); pdf.text("智能客服运营分析报告", 20, 36);
-  pdf.setFontSize(8); pdf.setTextColor(213, 222, 218); pdf.text(`统计周期：${range.from} 至 ${range.to}　生成时间：${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`, 20, 43);
+  pdf.setTextColor(255, 255, 255); pdf.setFontSize(22); pdf.text("智能客服运营分析报告", 20, 36);
+  pdf.setFontSize(8); pdf.setTextColor(213, 222, 218); pdf.text(`统计周期：${range.from} 至 ${range.to}  生成时间：${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`, 20, 43);
+
   pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text("一、核心指标", 12, 60);
   const metricItems = [["会话量", metrics.sessions || 0, "次"], ["AI 自助解决率", (metrics.solveRate || 0) + "%", ""], ["转人工率", (metrics.handoffRate || 0) + "%", ""], ["满意度", metrics.satisfaction || 0, "/5"]];
-  metricItems.forEach((item, index) => { const x = 12 + index * 47; pdf.setFillColor(255,255,255); pdf.setDrawColor(220,228,223); pdf.roundedRect(x, 65, 43, 28, 3, 3, "FD"); pdf.setFontSize(8); pdf.setTextColor(102,117,111); pdf.text(item[0], x+4, 73); pdf.setFontSize(18); pdf.setTextColor(...ink); pdf.text(String(item[1]), x+4, 86); pdf.setFontSize(7); pdf.setTextColor(102,117,111); pdf.text(item[2], x+31, 86); });
-  pdf.setFontSize(14); pdf.setTextColor(...ink); pdf.text("二、意图分布", 12, 107); pdf.text("三、知识缺口", 108, 107);
+  metricItems.forEach((item, index) => { const x = 12 + index * 47; pdf.setFillColor(255, 255, 255); pdf.setDrawColor(220, 228, 223); pdf.roundedRect(x, 65, 43, 28, 3, 3, "FD"); pdf.setFontSize(8); pdf.setTextColor(102, 117, 111); pdf.text(item[0], x + 4, 73); pdf.setFontSize(18); pdf.setTextColor(...ink); pdf.text(String(item[1]), x + 4, 86); pdf.setFontSize(7); pdf.setTextColor(102, 117, 111); pdf.text(item[2], x + 31, 86); });
+
+  let y = sectionTitle("二、意图分布 Top 7", 110);
   const intents = (data.intents || []).slice(0, 7);
-  intents.forEach((item, index) => { const y = 116 + index * 8; pdf.setFontSize(7.5); pdf.setTextColor(...ink); pdf.text(clipText(item.name, 12), 14, y); pdf.setFillColor(235,241,238); pdf.roundedRect(45,y-3,45,3,1.5,1.5,"F"); pdf.setFillColor(...green); pdf.roundedRect(45,y-3,45*item.percent/100,3,1.5,1.5,"F"); pdf.text(String(item.count),94,y); });
-  (data.knowledgeGaps || []).slice(0, 6).forEach((item,index)=>{ const y=113+index*12; pdf.setFillColor(...pale); pdf.roundedRect(108,y,88,9,2,2,"F"); pdf.setFontSize(7.5); pdf.setTextColor(...ink); pdf.text(clipText(item.question,24),112,y+5.8); pdf.text(item.count+" 次",192,y+5.8,{align:"right"}); });
-  pdf.setFontSize(14); pdf.text("四、服务闭环",12,177);
-  const closure = data.closure || [{name:"AI 自助解决",count:metrics.aiResolved||0},{name:"人工已解决",count:metrics.humanResolved||0},{name:"处理中",count:metrics.inProgress||0}];
-  const maxClosure=Math.max(...closure.map(x=>x.count),1); closure.forEach((item,index)=>{ const y=187+index*11; pdf.setFontSize(8); pdf.text(item.name,14,y); pdf.setFillColor(235,241,238); pdf.roundedRect(43,y-3,57,4,2,2,"F"); pdf.setFillColor(...colors[index]); pdf.roundedRect(43,y-3,57*item.count/maxClosure,4,2,2,"F"); pdf.text(String(item.count),104,y); }); drawDonut(pdf,closure,150,199,19,colors);
-  closure.forEach((item,index)=>{ const y=184+index*8; pdf.setFillColor(...colors[index]); pdf.rect(176,y-2.5,3,3,"F"); pdf.setFontSize(7); pdf.text(item.name,181,y); });
-  pdf.addPage(); pdf.setFont("SimHei"); pdf.setFillColor(...ink); pdf.rect(0,0,210,26,"F"); pdf.setFontSize(17); pdf.setTextColor(255,255,255); pdf.text("五、运营结论与改进建议",14,17);
-  let y=39; recommendations(data,raw).forEach((item,index)=>{ pdf.setFillColor(...pale); pdf.roundedRect(12,y-7,186,30,3,3,"F"); pdf.setFillColor(...ink); pdf.roundedRect(17,y-2,9,9,2,2,"F"); pdf.setTextColor(255,255,255); pdf.setFontSize(9); pdf.text(String(index+1),21.5,y+4,{align:"center"}); pdf.setTextColor(...ink); pdf.setFontSize(9); const next=drawWrapped(pdf,item,31,y,160,5.2); y=Math.max(y+37,next+9); });
-  pdf.setDrawColor(220,228,223); pdf.line(12,274,198,274); pdf.setTextColor(103,118,111); pdf.setFontSize(7); pdf.text("本报告按北京时间统计，数据已脱敏；正文为矢量文字，可搜索和复制。",12,281);
-  const pages=pdf.getNumberOfPages(); for(let page=1;page<=pages;page++){ pdf.setPage(page); pdf.setFont("SimHei"); pdf.setFontSize(7); pdf.setTextColor(125,135,130); pdf.text(`${page} / ${pages}`,198,290,{align:"right"}); }
+  const intentMax = Math.max(...intents.map((item) => item.count), 1);
+  intents.forEach((item) => {
+    y = ensureSpace(y, 10);
+    pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(clipText(item.name, 18), 14, y);
+    pdf.setFillColor(235, 241, 238); pdf.roundedRect(58, y - 3.5, 104, 4.5, 2, 2, "F");
+    pdf.setFillColor(...green); pdf.roundedRect(58, y - 3.5, 104 * item.count / intentMax, 4.5, 2, 2, "F");
+    pdf.setFontSize(8); pdf.text(String(item.count), 170, y);
+    y += 10;
+  });
+
+  y = sectionTitle("三、知识缺口 Top 6", y + 6);
+  (data.knowledgeGaps || []).slice(0, 6).forEach((item) => {
+    const lines = pdf.splitTextToSize(String(item.question || ""), 145);
+    const rowHeight = Math.max(13, lines.length * 4.8 + 8);
+    y = ensureSpace(y, rowHeight + 3);
+    pdf.setFillColor(...pale); pdf.roundedRect(12, y - 5, 186, rowHeight, 3, 3, "F");
+    pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(lines, 17, y + 2);
+    pdf.setFontSize(8); pdf.text(`${item.count} 次`, 190, y + 2, { align: "right" });
+    y += rowHeight + 3;
+  });
+
+  y = sectionTitle("四、服务闭环", y + 7);
+  const closure = data.closure || [{ name: "AI 自助解决", count: metrics.aiResolved || 0 }, { name: "人工已解决", count: metrics.humanResolved || 0 }, { name: "处理中", count: metrics.inProgress || 0 }];
+  y = ensureSpace(y, 52);
+  const maxClosure = Math.max(...closure.map((item) => item.count), 1);
+  closure.forEach((item, index) => { const rowY = y + index * 12; pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(item.name, 14, rowY); pdf.setFillColor(235, 241, 238); pdf.roundedRect(52, rowY - 3.5, 82, 5, 2.5, 2.5, "F"); pdf.setFillColor(...colors[index]); pdf.roundedRect(52, rowY - 3.5, 82 * item.count / maxClosure, 5, 2.5, 2.5, "F"); pdf.text(String(item.count), 140, rowY); });
+  drawDonut(pdf, closure, 168, y + 11, 18, colors);
+  y += 48;
+
+  pdf.addPage(); pdf.setFont("SimHei"); pdf.setFillColor(...ink); pdf.rect(0, 0, 210, 26, "F"); pdf.setFontSize(17); pdf.setTextColor(255, 255, 255); pdf.text("五、运营结论与改进建议", 14, 17);
+  y = 39;
+  recommendations(data, raw).forEach((item, index) => {
+    const lines = pdf.splitTextToSize(String(item || ""), 154);
+    const cardHeight = Math.max(24, lines.length * 5.2 + 14);
+    y = ensureSpace(y, cardHeight + 8, "五、运营结论与改进建议（续）");
+    pdf.setFillColor(...pale); pdf.roundedRect(12, y - 7, 186, cardHeight, 3, 3, "F");
+    pdf.setFillColor(...ink); pdf.roundedRect(17, y - 2, 9, 9, 2, 2, "F");
+    pdf.setTextColor(255, 255, 255); pdf.setFontSize(9); pdf.text(String(index + 1), 21.5, y + 4, { align: "center" });
+    pdf.setTextColor(...ink); pdf.setFontSize(9); pdf.text(lines, 31, y);
+    y += cardHeight + 8;
+  });
+
+  const pages = pdf.getNumberOfPages();
+  for (let page = 1; page <= pages; page += 1) {
+    pdf.setPage(page); pdf.setFont("SimHei");
+    pdf.setDrawColor(220, 228, 223); pdf.line(12, 274, 198, 274);
+    pdf.setTextColor(103, 118, 111); pdf.setFontSize(7); pdf.text("本报告按北京时间统计，数据已脱敏；正文为矢量文字，可搜索和复制。", 12, 281);
+    pdf.setTextColor(125, 135, 130); pdf.text(`${page} / ${pages}`, 198, 290, { align: "right" });
+  }
   pdf.save(`言析智能客服_运营分析_${range.from}_${range.to}.pdf`);
 }

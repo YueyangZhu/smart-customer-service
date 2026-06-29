@@ -71,8 +71,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .typing span { color: var(--green); letter-spacing: .15em; margin-left: 4px; }
 .quick-row { padding: 8px 20px; display: flex; gap: 8px; overflow-x: auto; }
 .quick-row button { flex: 0 0 auto; background: #f3f7f5; border: 1px solid var(--line); color: #496159; padding: 8px 10px; border-radius: 999px; font-size: 11px; }
-.quick-row button:hover { border-color: var(--green); color: var(--green); }
+.quick-row button:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.closed-session { margin: 0 20px 8px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; border: 1px solid #d9e4df; border-radius: 14px; background: #f6faf8; color: var(--ink); }
+.closed-session span { flex: 1; color: var(--muted); font-size: 12px; }
+.closed-session button { border: 0; background: var(--green); color: #fff; font-weight: 800; padding: 9px 13px; border-radius: 10px; }
 .composer { margin: 8px 18px 18px; padding: 8px; border: 1px solid #cfdad5; background: #f8faf9; border-radius: 17px; display: flex; gap: 8px; align-items: flex-end; }
+.composer.closed { background: #eef3f0; }
 .composer textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; padding: 8px; line-height: 1.5; }
 .composer button, .refund-card button { border: 0; background: var(--green); color: white; font-weight: 800; padding: 11px 18px; border-radius: 12px; }
 .refund-card { margin: 0 24px 8px; padding: 12px; background: #f7faf8; border: 1px solid var(--line); border-radius: 14px; display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: center; }
@@ -141,26 +145,28 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .page-title > p:last-child { color: var(--muted); }
 .report-tools { min-width: 540px; display: grid; gap: 10px; justify-items: end; }
 .date-range { display: flex; align-items: flex-end; gap: 10px; }
-.date-range label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; }
-.date-range input { border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 9px 11px; color: var(--ink); }
+.date-range label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.date-range input { border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 10px 12px; color: var(--ink); cursor: pointer; }
 .date-range > span { padding-bottom: 9px; color: var(--muted); }
 .export-actions { display: flex; gap: 8px; }
 .export-actions button { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 15px; font-weight: 700; }
 .report-tools small { color: var(--muted); }
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 30px 0; }
-.metric-grid article { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
-.metric-grid span { display: block; color: var(--muted); font-size: 12px; }
-.metric-grid strong { display: block; margin-top: 12px; font-size: 38px; }
-.metric-grid small { font-size: 13px; color: #89958f; margin-left: 3px; }
+.metric-grid article { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 24px; }
+.metric-grid span { display: block; color: var(--muted); font-size: 13px; }
+.metric-grid strong { display: block; margin-top: 14px; font-size: 44px; line-height: 1; }
+.metric-grid small { font-size: 14px; color: #89958f; margin-left: 4px; }
 .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.analytics-grid article { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 22px; min-height: 260px; }
+.analytics-grid article { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 26px; min-height: 270px; }
 .analytics-grid article.wide { grid-column: 1 / -1; min-height: 0; }
-.analytics-grid h2 { margin: 0 0 22px; font-size: 18px; }
-.bars > div { display: grid; grid-template-columns: 130px 1fr 35px; gap: 10px; align-items: center; margin: 13px 0; font-size: 11px; }
-.bars > div > div { height: 7px; background: #eef2f0; border-radius: 99px; overflow: hidden; }
+.analytics-grid h2 { margin: 0 0 24px; font-size: 20px; }
+.compact-list { max-height: 260px; overflow-y: auto; padding-right: 3px; }
+.bars > div { display: grid; grid-template-columns: 145px 1fr 38px; gap: 12px; align-items: center; margin: 17px 0; font-size: 13px; }
+.bars > div > div { height: 9px; background: #eef2f0; border-radius: 99px; overflow: hidden; }
 .bars i { display: block; height: 100%; background: var(--green); border-radius: 99px; }
-.gap-list { display: grid; gap: 9px; }
-.gap-list div { display: flex; justify-content: space-between; gap: 15px; background: #f5f8f6; border-radius: 10px; padding: 12px; font-size: 12px; }
+.gap-list { display: grid; gap: 11px; }
+.gap-list div { display: flex; justify-content: space-between; gap: 18px; background: #f5f8f6; border-radius: 11px; padding: 14px; font-size: 13px; line-height: 1.55; }
+.gap-list b { flex: 0 0 auto; }
 .funnel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .funnel div { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 14px; background: #f4f7f5; border-radius: 12px; }
 .funnel i { width: 25px; height: 25px; display: grid; place-items: center; background: var(--ink); color: white; border-radius: 8px; font-style: normal; font-size: 10px; }

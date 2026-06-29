@@ -75,9 +75,22 @@ function CustomerPage() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  async function startNewSession() {
+    setLoading(true);
+    try {
+      const data = await api.createSession();
+      localStorage.setItem("yanxi_session_id", data.session.id);
+      setSession(data.session); setMessages(data.messages); setDecision(decisionFromMessages(data.messages)); setInput("");
+    } finally { setLoading(false); }
+  }
+
   async function send(text = input) {
     const value = text.trim();
     if (!value || !session || loading) return;
+    if (session.status === "closed") {
+      setMessages((old) => [...old, { id: crypto.randomUUID(), role: "system", content: "本次服务已结束，请新建会话后继续咨询。" }]);
+      return;
+    }
     setInput(""); setLoading(true);
     setDecision({ phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
     setMessages((old) => [...old, { id: crypto.randomUUID(), role: "user", content: value, createdAt: beijingNow() }]);
@@ -91,6 +104,7 @@ function CustomerPage() {
   }
 
   const lastAi = useMemo(() => [...messages].reverse().find((m) => m.role === "assistant"), [messages]);
+  const isClosed = session?.status === "closed";
   return <main className="customer-layout">
     <section className="intro-panel">
       <p className="eyebrow">AI AFTER-SALES SERVICE</p>
@@ -109,12 +123,13 @@ function CustomerPage() {
         {messages.map((m) => <Message key={m.id} message={m} />)}
         {loading && <div className="message assistant"><div className="avatar">AI</div><div className="bubble typing">正在理解你的问题<span>•••</span></div></div>}
       </div>
-      {lastAi?.action === "show_refund_form" && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={() => api.getSession(session.id).then((d) => setMessages(d.messages))} />}
-      <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} onClick={() => send(text)}>{label}</button>)}</div>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="请描述你的售后问题，可附上订单号…" rows="2" />
-        <small className="keyboard-hint">Enter 发送 · Shift+Enter 换行</small>
-        <button disabled={!input.trim() || loading}>发送</button>
+      {lastAi?.action === "show_refund_form" && !isClosed && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={() => api.getSession(session.id).then((d) => setMessages(d.messages))} />}
+      {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>继续咨询请开启一个新的会话。</span><button onClick={startNewSession} disabled={loading}>新建会话</button></div>}
+      <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={isClosed || loading} onClick={() => send(text)}>{label}</button>)}</div>
+      <form className={`composer ${isClosed ? "closed" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <textarea disabled={isClosed} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={isClosed ? "本次服务已结束，请新建会话后继续咨询" : "请描述你的售后问题，可附上订单号…"} rows="2" />
+        <small className="keyboard-hint">{isClosed ? "旧会话已锁定" : "Enter 发送 · Shift+Enter 换行"}</small>
+        <button disabled={isClosed || !input.trim() || loading}>发送</button>
       </form>
     </section>
 
@@ -128,7 +143,7 @@ function CustomerPage() {
       <Decision label="风险等级" value={loading ? "评估中" : riskLabel((decision || lastAi)?.riskLevel)} tone={(decision || lastAi)?.riskLevel} />
       <div className="explain">这里展示 AI 为什么这样回答，以及何时把问题交给人工处理。</div>
     </aside>
-    {ratingOpen && <RatingModal session={session} onClose={() => setRatingOpen(false)} />}
+    {ratingOpen && <RatingModal session={session} onClose={() => setRatingOpen(false)} onSubmitted={() => api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); })} />}
   </main>;
 }
 
@@ -156,9 +171,9 @@ function RefundCard({ session, orderNo = "", onDone }) {
   return <div className="refund-card"><b>退款申请</b><input value={order} onChange={(e) => setOrder(e.target.value)} placeholder="订单号" /><select value={reason} onChange={(e) => setReason(e.target.value)}><option>商品不合适</option><option>商品质量问题</option><option>错发或漏发</option><option>其他原因</option></select><button onClick={submit}>提交申请</button>{state && <small>{state}</small>}</div>;
 }
 
-function RatingModal({ session, onClose }) {
+function RatingModal({ session, onClose, onSubmitted }) {
   const [score, setScore] = useState(5), [resolved, setResolved] = useState(true), [comment, setComment] = useState(""), [done, setDone] = useState(false);
-  async function submit() { await api.submitRating({ sessionId: session.id, score, resolved, comment }); setDone(true); }
+  async function submit() { await api.submitRating({ sessionId: session.id, score, resolved, comment }); await onSubmitted?.(); setDone(true); }
   return <div className="modal-backdrop"><div className="modal">
     {done ? <><div className="success-mark">✓</div><h2>谢谢你的评价</h2><p>反馈会帮助我们改进知识库和服务流程。</p><button className="primary" onClick={onClose}>完成</button></> : <>
       <p className="eyebrow">SERVICE REVIEW</p><h2>这次问题解决了吗？</h2>
@@ -175,13 +190,14 @@ function AgentPage() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const refresh = () => api.listTickets().then((d) => { setTickets(d.tickets); setSelectedId((id) => id && d.tickets.some((t) => t.id === id) ? id : d.tickets[0]?.id || null); });
   useEffect(() => { refresh(); const timer = setInterval(refresh, 3000); return () => clearInterval(timer); }, []);
+  const priorityCounts = { all: tickets.length, high: tickets.filter((ticket) => ticket.priority === "high").length, normal: tickets.filter((ticket) => ticket.priority === "normal").length };
   const filteredTickets = tickets.filter((ticket) => priorityFilter === "all" || ticket.priority === priorityFilter);
-  const selected = tickets.find((t) => t.id === selectedId);
+  const selected = filteredTickets.find((t) => t.id === selectedId) || filteredTickets[0];
   async function act(fn) { await fn(); await refresh(); }
   async function sendReply() { if (!selected || selected.status !== "processing" || !reply.trim()) return; await act(async () => { await api.replyTicket(selected.id, reply); setReply(""); }); }
   return <main className="workspace">
     <aside className="ticket-sidebar"><p className="eyebrow">HUMAN DESK</p><h1>人工工作台</h1>
-      <div className="queue-toolbar"><div className="queue-tabs"><button className="active">全部 {tickets.length}</button></div><label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部</option><option value="high">紧急</option><option value="normal">普通</option></select></label></div>
+      <div className="queue-toolbar"><div className="queue-tabs"><button className="active">当前 {filteredTickets.length}</button></div><label>优先级<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">全部 {priorityCounts.all}</option><option value="high">紧急 {priorityCounts.high}</option><option value="normal">普通 {priorityCounts.normal}</option></select></label></div>
       <div className="ticket-list">{filteredTickets.map((t) => <button key={t.id} className={selectedId === t.id ? "selected" : ""} onClick={() => setSelectedId(t.id)}><span><b>{t.intent}</b><small>{t.id}</small></span><i className={t.priority}>{t.priority === "high" ? "紧急" : "普通"}</i><p>{t.summary}</p></button>)}</div>
     </aside>
     <section className="ticket-detail">{selected ? <>
@@ -199,6 +215,7 @@ function AnalyticsPage() {
   const [to, setTo] = useState(() => beijingDate());
   const [exporting, setExporting] = useState("");
   const [notice, setNotice] = useState("");
+  const fromInputRef = useRef(null), toInputRef = useRef(null);
   useEffect(() => {
     const refresh = () => api.dashboard({ from, to }).then(setData).catch(() => null);
     refresh();
@@ -221,11 +238,13 @@ function AnalyticsPage() {
   let angle = 0;
   const colors = ["#0b7a61", "#86b8a7", "#f0a45d", "#d8dedb"];
   const donut = `conic-gradient(${closure.map((item, index) => { const start = angle; angle += item.count / closureTotal * 360; return `${colors[index % colors.length]} ${start}deg ${angle}deg`; }).join(",")})`;
+  const topIntents = (data?.intents || []).slice(0, 5);
+  const topKnowledgeGaps = (data?.knowledgeGaps || []).slice(0, 5);
   return <main className="analytics"><div className="analytics-heading"><div className="page-title"><p className="eyebrow">SERVICE INTELLIGENCE</p><h1>运营洞察</h1><p>从每一次服务中，找到下一次优化的方向。</p></div>
-    <div className="report-tools"><div className="date-range"><label>开始日期<input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label><span>至</span><label>结束日期<input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label></div><div className="export-actions"><button disabled={Boolean(exporting) || !data} onClick={downloadExcel}>{exporting === "excel" ? "正在生成…" : "导出 Excel"}</button><button className="primary" disabled={Boolean(exporting) || !data} onClick={downloadPdf}>{exporting === "pdf" ? "正在生成…" : "生成 PDF 报告"}</button></div><small>{notice || "按北京时间统计，导出数据自动隐藏用户身份标识"}</small></div></div>
+    <div className="report-tools"><div className="date-range"><label onClick={() => fromInputRef.current?.showPicker?.()}>开始日期<input ref={fromInputRef} type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label><span>至</span><label onClick={() => toInputRef.current?.showPicker?.()}>结束日期<input ref={toInputRef} type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label></div><div className="export-actions"><button disabled={Boolean(exporting) || !data} onClick={downloadExcel}>{exporting === "excel" ? "正在生成…" : "导出 Excel"}</button><button className="primary" disabled={Boolean(exporting) || !data} onClick={downloadPdf}>{exporting === "pdf" ? "正在生成…" : "生成 PDF 报告"}</button></div><small>{notice || "按北京时间统计，导出数据自动隐藏用户身份标识"}</small></div></div>
     <section className="metric-grid">{cards.map(([label, value, unit]) => <article key={label}><span>{label}</span><strong>{value ?? "--"}<small>{unit}</small></strong></article>)}</section>
-    <section className="analytics-grid"><article><InfoTitle title="意图分布" tip="按 AI 最终识别的售后意图统计。数量反映各类问题出现频次，横条越长代表占比越高。" /><div className="bars">{(data?.intents || []).map((x) => <div key={x.name}><span>{x.name}</span><div><i style={{ width: `${x.percent}%` }} /></div><b>{x.count}</b></div>)}</div></article>
-      <article><InfoTitle title="知识缺口" tip="AI 无法从现有知识库获得可靠答案、需要人工补充的问题。次数越高，越应优先补充知识。" /><div className="gap-list">{(data?.knowledgeGaps || []).map((x) => <div key={x.question}><span>{x.question}</span><b>{x.count} 次</b></div>)}</div></article>
+    <section className="analytics-grid"><article><InfoTitle title="意图分布 Top 5" tip="按 AI 最终识别的售后意图统计。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="bars compact-list">{topIntents.map((x) => <div key={x.name}><span>{x.name}</span><div><i style={{ width: `${x.percent}%` }} /></div><b>{x.count}</b></div>)}</div></article>
+      <article><InfoTitle title="知识缺口 Top 5" tip="AI 无法从现有知识库获得可靠答案、需要人工补充的问题。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="gap-list compact-list">{topKnowledgeGaps.map((x) => <div key={x.question}><span>{x.question}</span><b>{x.count} 次</b></div>)}</div></article>
       <article className="wide"><InfoTitle title="闭环状态" tip="展示会话最终流向：AI 自助解决、人工已解决或仍在处理中；用于判断服务链路是否真正完成。" /><div className="closure-layout"><div className="closure-bars">{closure.map((item, index) => <div key={item.name}><span><i style={{ background: colors[index % colors.length] }} />{item.name}</span><div><b style={{ width: `${Math.round(item.count / closureMax * 100)}%`, background: colors[index % colors.length] }} /></div><strong>{item.count}</strong></div>)}</div><div className="closure-donut-wrap"><div className="closure-donut" style={{ background: donut }}><span><b>{closureTotal}</b>会话</span></div><div className="closure-legend">{closure.map((item, index) => <span key={item.name}><i style={{ background: colors[index % colors.length] }} />{item.name} {Math.round(item.count / closureTotal * 100)}%</span>)}</div></div></div></article>
     </section>
   </main>;

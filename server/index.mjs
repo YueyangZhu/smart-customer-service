@@ -372,6 +372,24 @@ app.post("/api/chat", async (req, res, next) => {
     const session = await store.getSession(sessionId);
     if (!session || typeof message !== "string" || !message.trim()) return res.status(400).json({ message: "会话或消息无效" });
     const text = message.trim();
+
+    if (session.status === "closed") {
+      return res.status(409).json({
+        message: "本次服务已结束，请新建会话后继续咨询。",
+        session,
+        messages: await store.listMessages(sessionId)
+      });
+    }
+
+    if (["waiting_agent", "processing", "open"].includes(session.status) || session.ticketId) {
+      await addMessage(sessionId, "user", text, { intent: "等待人工", confidence: 1, action: "wait_agent", source: "人工客服", riskLevel: "medium" });
+      return res.json({
+        session: await store.getSession(sessionId),
+        messages: await store.listMessages(sessionId),
+        decision: { intent: "等待人工", confidence: 1, action: "wait_agent", source: "人工客服", riskLevel: "medium", needHandoff: false }
+      });
+    }
+
     await addMessage(sessionId, "user", text);
     const result = understand(text);
     let aiAnswer = "";
