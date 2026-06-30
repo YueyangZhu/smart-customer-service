@@ -61,7 +61,7 @@ export async function exportExcel(data, dashboard) {
     ["统计周期", `${data.range.from || "全部"} 至 ${data.range.to || "全部"}`, "导出数据已移除用户身份标识"],
     ["生成时间", dateTime(data.range.generatedAt), ""],
     ["会话量", metrics.sessions || 0, "次"],
-    ["AI 自助解决率", (metrics.solveRate || 0) / 100, "已解决评价数 / 会话量"],
+    ["AI 自助解决率", (metrics.solveRate || 0) / 100, "AI 自助解决会话 / 区间会话"],
     ["转人工率", (metrics.handoffRate || 0) / 100, "人工工单数 / 会话量"],
     ["平均满意度", metrics.satisfaction || 0, "满分 5 分"],
     ["消息量", metrics.messages || 0, "条"],
@@ -91,33 +91,80 @@ export async function exportExcel(data, dashboard) {
 
 function clipText(value, length = 54) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
-  return text.length > length ? text.slice(0, length) + "…" : text;
+  return text.length > length ? text.slice(0, length) + "..." : text;
+}
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function percent(part, total) {
+  const base = Math.max(safeNumber(total), 1);
+  return Math.round(safeNumber(part) / base * 100);
+}
+
+function statusText(value) {
+  return ({ active: "服务中", waiting_agent: "等待人工", open: "待接入", processing: "处理中", closed: "已关闭" })[value] || value || "--";
+}
+
+function priorityText(value) {
+  return value === "high" ? "紧急" : "普通";
+}
+
+function reportRange(range = {}) {
+  return `${range.from || "全部"} 至 ${range.to || "全部"}`;
 }
 
 function recommendations(data, raw = {}) {
   const metrics = data.metrics || {};
   const items = [];
-  const gaps = [...(data.knowledgeGaps || [])].sort((a, b) => b.count - a.count);
+  const gaps = [...(data.knowledgeGaps || [])].sort((a, b) => safeNumber(b.count) - safeNumber(a.count));
+  const intents = [...(data.intents || [])].sort((a, b) => safeNumber(b.count) - safeNumber(a.count));
+  const lowRating = (raw.ratings || []).find((item) => Number(item.score) <= 2);
+  const highTicket = (raw.tickets || []).find((item) => item.priority === "high");
+
   if (gaps.length) {
     const top = gaps[0];
-    items.push(`知识缺口“${clipText(top.question, 30)}”出现 ${top.count} 次。建议新增一条包含适用条件、操作入口、有效期和异常处理方式的 FAQ，上线后用原问题及两种同义问法回归测试。`);
+    items.push({
+      title: "优先补齐知识缺口",
+      text: `「${clipText(top.question, 44)}」出现 ${top.count} 次。建议补一条可直接执行的 FAQ，至少包含适用条件、处理入口、时效承诺和异常升级规则，上线后用原问题和同义问法回归测试。`
+    });
   }
-  const lowRating = (raw.ratings || []).find((item) => Number(item.score) <= 2);
+  if (intents.length) {
+    const top = intents[0];
+    const total = Math.max(intents.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
+    items.push({
+      title: "复盘最高频售后意图",
+      text: `最高频意图是「${top.name}」，占 Top5 意图的 ${percent(top.count, total)}%。建议检查这类问题是否已有清晰入口、状态查询和标准回复，能标准化的步骤优先沉淀到知识库。`
+    });
+  }
+  if (safeNumber(metrics.handoffRate) > 30 || highTicket) {
+    items.push({
+      title: "降低非必要转人工",
+      text: `当前转人工率 ${metrics.handoffRate || 0}%，人工工单 ${metrics.handoffs || (raw.tickets || []).length || 0} 个。建议把金额争议、投诉、主动要求人工继续保持高优先级，同时复盘普通工单中可由 AI 直接解决的场景。`
+    });
+  }
   if (lowRating) {
     const userMessage = [...(raw.messages || [])].reverse().find((item) => item.sessionId === lowRating.sessionId && item.role === "user");
-    items.push(`低评分会话（${lowRating.score} 分）涉及“${clipText(userMessage?.content || lowRating.comment, 34)}”。建议在人工工作台明确首次响应时限，并要求关闭前记录处理结论；下周抽查同类会话是否真正闭环。`);
+    items.push({
+      title: "跟进低分会话",
+      text: `发现 ${lowRating.score} 分低评价，相关问题为「${clipText(userMessage?.content || lowRating.comment, 50)}」。建议人工关闭前补充处理结论，并在下个周期抽查同类问题是否真正闭环。`
+    });
   }
-  const ticket = (raw.tickets || []).find((item) => item.priority === "high") || (raw.tickets || [])[0];
-  if (ticket) items.push(`人工工单示例“${clipText(ticket.summary || ticket.handoffReason, 42)}”。建议把“金额争议、投诉、主动要求人工”固化为高优先级规则，并监控接入耗时和关闭原因，避免只转单不解决。`);
-  if ((metrics.handoffRate || 0) > 30) items.push(`本周期转人工率为 ${metrics.handoffRate}%。建议优先复盘高频转人工意图，将可标准化的查询步骤写入知识库或订单查询规则，并以转人工率下降 5 个百分点作为下一周期目标。`);
-  if (!items.length) items.push("本周期核心指标稳定。建议每周抽样 10 条会话检查回答准确性、时效性和解决闭环，并记录知识库更新日期。 ");
+  if (!items.length) {
+    items.push({ title: "保持周度质检", text: "本周期核心指标稳定。建议每周抽样 10 条会话检查回答准确性、时效和闭环结果，并记录知识库更新日期。" });
+  }
   return items.slice(0, 4);
 }
 
-async function installChineseFont(pdf) {
-  const response = await fetch(`${import.meta.env.BASE_URL}fonts/simhei.ttf`);
-  if (!response.ok) throw new Error("中文报告字体加载失败");
-  const bytes = new Uint8Array(await response.arrayBuffer());
+async function installChineseFont(pdf, fontBytes) {
+  let bytes = fontBytes ? new Uint8Array(fontBytes) : null;
+  if (!bytes) {
+    const response = await fetch(`${import.meta.env.BASE_URL}fonts/simhei.ttf`);
+    if (!response.ok) throw new Error("中文报告字体加载失败");
+    bytes = new Uint8Array(await response.arrayBuffer());
+  }
   let binary = "";
   const size = 0x8000;
   for (let index = 0; index < bytes.length; index += size) binary += String.fromCharCode(...bytes.subarray(index, index + size));
@@ -126,113 +173,312 @@ async function installChineseFont(pdf) {
   pdf.setFont("SimHei", "normal");
 }
 
-function drawWrapped(pdf, text, x, y, width, lineHeight = 5) {
-  const lines = pdf.splitTextToSize(String(text || ""), width);
-  pdf.text(lines, x, y);
-  return y + lines.length * lineHeight;
+const PDF = {
+  ink: [20, 33, 43],
+  green: [11, 114, 88],
+  deepGreen: [0, 103, 79],
+  lightGreen: [230, 241, 235],
+  pale: [245, 248, 246],
+  line: [218, 229, 223],
+  muted: [98, 113, 107],
+  orange: [241, 164, 93],
+  blue: [94, 141, 176],
+  gray: [207, 217, 212],
+  white: [255, 255, 255]
+};
+
+const INTENT_COLORS = [PDF.green, [31, 143, 114], [134, 184, 167], PDF.orange, PDF.gray];
+const CLOSURE_COLORS = [PDF.green, [134, 184, 167], PDF.orange, PDF.gray];
+
+function setFill(pdf, color) { pdf.setFillColor(...color); }
+function setDraw(pdf, color) { pdf.setDrawColor(...color); }
+function setText(pdf, color) { pdf.setTextColor(...color); }
+
+function pageSize(pdf) {
+  return { width: pdf.internal.pageSize.getWidth(), height: pdf.internal.pageSize.getHeight() };
 }
 
-function drawDonut(pdf, items, cx, cy, radius, colors) {
-  const total = Math.max(items.reduce((sum, item) => sum + item.count, 0), 1);
+function drawPageBackground(pdf) {
+  const { width, height } = pageSize(pdf);
+  setFill(pdf, PDF.pale);
+  pdf.rect(0, 0, width, height, "F");
+}
+
+function drawTextBlock(pdf, text, x, y, width, options = {}) {
+  const fontSize = options.fontSize || 9;
+  const lineHeight = options.lineHeight || fontSize * 0.48;
+  pdf.setFontSize(fontSize);
+  const lines = pdf.splitTextToSize(String(text || ""), width);
+  pdf.text(lines, x, y, { lineHeightFactor: 1.25 });
+  return y + Math.max(lines.length, 1) * lineHeight;
+}
+
+function drawCard(pdf, x, y, width, height, options = {}) {
+  setFill(pdf, options.fill || PDF.white);
+  setDraw(pdf, options.stroke || PDF.line);
+  pdf.setLineWidth(options.lineWidth || 0.25);
+  pdf.roundedRect(x, y, width, height, options.radius || 5, options.radius || 5, "FD");
+}
+
+function drawSectionTitle(pdf, title, subtitle, x, y, width) {
+  setText(pdf, PDF.ink);
+  pdf.setFontSize(13);
+  pdf.text(title, x, y);
+  if (subtitle) {
+    setText(pdf, PDF.muted);
+    drawTextBlock(pdf, subtitle, x, y + 6, width, { fontSize: 7.8, lineHeight: 3.8 });
+  }
+}
+
+function drawMetricCard(pdf, item, x, y, width, height) {
+  drawCard(pdf, x, y, width, height);
+  setText(pdf, PDF.muted);
+  pdf.setFontSize(8.5);
+  pdf.text(item.label, x + 6, y + 8.5);
+  setText(pdf, item.tone || PDF.ink);
+  pdf.setFontSize(20);
+  pdf.text(String(item.value ?? "--"), x + 6, y + 21);
+  setText(pdf, PDF.muted);
+  pdf.setFontSize(8);
+  pdf.text(item.unit || "", x + width - 12, y + 21, { align: "right" });
+  if (item.note) drawTextBlock(pdf, item.note, x + 6, y + 28, width - 12, { fontSize: 7.2, lineHeight: 3.5 });
+}
+
+function drawBar(pdf, x, y, width, value, max, color, height = 3.8) {
+  setFill(pdf, [234, 240, 237]);
+  pdf.roundedRect(x, y, width, height, height / 2, height / 2, "F");
+  if (safeNumber(value) > 0) {
+    setFill(pdf, color);
+    pdf.roundedRect(x, y, width * safeNumber(value) / Math.max(safeNumber(max), 1), height, height / 2, height / 2, "F");
+  }
+}
+
+function drawDonut(pdf, items, cx, cy, radius, colors, center = {}) {
+  const total = Math.max(items.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
+  const hasValue = items.some((item) => safeNumber(item.count) > 0);
+  if (!hasValue) {
+    setFill(pdf, PDF.gray);
+    pdf.circle(cx, cy, radius, "F");
+  }
   let start = -90;
   items.forEach((item, index) => {
-    const end = start + item.count / total * 360;
-    const color = colors[index % colors.length];
-    pdf.setFillColor(...color);
-    for (let degree = start; degree < end; degree += 2) {
-      const next = Math.min(degree + 2.2, end);
-      const p1 = [cx + radius * Math.cos(degree * Math.PI / 180), cy + radius * Math.sin(degree * Math.PI / 180)];
-      const p2 = [cx + radius * Math.cos(next * Math.PI / 180), cy + radius * Math.sin(next * Math.PI / 180)];
-      pdf.triangle(cx, cy, p1[0], p1[1], p2[0], p2[1], "F");
+    const count = safeNumber(item.count);
+    const end = start + count / total * 360;
+    if (count > 0) {
+      setFill(pdf, colors[index % colors.length]);
+      for (let degree = start; degree < end; degree += 1.8) {
+        const next = Math.min(degree + 2, end);
+        const p1 = [cx + radius * Math.cos(degree * Math.PI / 180), cy + radius * Math.sin(degree * Math.PI / 180)];
+        const p2 = [cx + radius * Math.cos(next * Math.PI / 180), cy + radius * Math.sin(next * Math.PI / 180)];
+        pdf.triangle(cx, cy, p1[0], p1[1], p2[0], p2[1], "F");
+      }
     }
     start = end;
   });
-  pdf.setFillColor(255, 255, 255); pdf.circle(cx, cy, radius * .58, "F");
-  pdf.setTextColor(20, 33, 43); pdf.setFontSize(15); pdf.text(String(total), cx, cy + 1, { align: "center" });
-  pdf.setFontSize(7); pdf.setTextColor(105, 119, 112); pdf.text("会话", cx, cy + 6, { align: "center" });
+  setFill(pdf, PDF.white);
+  pdf.circle(cx, cy, radius * 0.6, "F");
+  setText(pdf, PDF.ink);
+  pdf.setFontSize(center.size || 15);
+  pdf.text(String(center.value ?? total), cx, cy - 1, { align: "center" });
+  setText(pdf, PDF.muted);
+  pdf.setFontSize(7.2);
+  pdf.text(center.label || "会话", cx, cy + 6, { align: "center" });
 }
 
-export async function exportPdf(data, range, raw = {}) {
+function drawIntentCard(pdf, data, x, y, width, height) {
+  drawCard(pdf, x, y, width, height);
+  const intents = (data.intents || []).slice(0, 5);
+  const total = Math.max(intents.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
+  drawSectionTitle(pdf, "意图分布 Top 5", "与网页口径一致：按 AI 最终识别的售后意图统计。", x + 7, y + 11, width - 14);
+  drawDonut(pdf, intents, x + 30, y + 46, 19, INTENT_COLORS, {
+    value: intents[0] ? `${percent(intents[0].count, total)}%` : "0%",
+    label: intents[0]?.name || "暂无意图",
+    size: 13
+  });
+  const max = Math.max(...intents.map((item) => safeNumber(item.count)), 1);
+  intents.forEach((item, index) => {
+    const rowY = y + 30 + index * 10;
+    setFill(pdf, INTENT_COLORS[index % INTENT_COLORS.length]);
+    pdf.roundedRect(x + 58, rowY - 4.2, 5.2, 5.2, 1.4, 1.4, "F");
+    setText(pdf, PDF.white);
+    pdf.setFontSize(6.8);
+    pdf.text(String(index + 1), x + 60.6, rowY - 0.5, { align: "center" });
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8.4);
+    pdf.text(clipText(item.name, 14), x + 66, rowY);
+    drawBar(pdf, x + 96, rowY - 3.2, width - 122, safeNumber(item.count), max, INTENT_COLORS[index % INTENT_COLORS.length], 3.5);
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8);
+    pdf.text(`${item.count} 次`, x + width - 8, rowY, { align: "right" });
+  });
+  if (!intents.length) {
+    setText(pdf, PDF.muted);
+    pdf.setFontSize(9);
+    pdf.text("当前周期暂无意图数据", x + 58, y + 45);
+  }
+}
+
+function drawKnowledgeCard(pdf, data, x, y, width, height) {
+  drawCard(pdf, x, y, width, height);
+  const gaps = (data.knowledgeGaps || []).slice(0, 5);
+  drawSectionTitle(pdf, "知识缺口 Top 5", "需要补充知识库或规则的高频问题，完整明细仍保留在 Excel。", x + 7, y + 11, width - 14);
+  if (!gaps.length) {
+    setText(pdf, PDF.muted);
+    pdf.setFontSize(9);
+    pdf.text("当前周期暂无知识缺口", x + 7, y + 42);
+    return;
+  }
+  gaps.forEach((item, index) => {
+    const rowY = y + 29 + index * 10.5;
+    setFill(pdf, index === 0 ? PDF.lightGreen : [246, 249, 247]);
+    pdf.roundedRect(x + 7, rowY - 6, width - 14, 8, 2.5, 2.5, "F");
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8.2);
+    pdf.text(clipText(item.question, 42), x + 11, rowY - 0.7);
+    setText(pdf, PDF.deepGreen);
+    pdf.setFontSize(8.2);
+    pdf.text(`${item.count} 次`, x + width - 11, rowY - 0.7, { align: "right" });
+  });
+}
+
+function drawClosureCard(pdf, data, x, y, width, height) {
+  drawCard(pdf, x, y, width, height);
   const metrics = data.metrics || {};
-  const pdf = new jsPDF("p", "mm", "a4");
-  await installChineseFont(pdf);
-  const green = [11, 114, 88], ink = [20, 33, 43], pale = [241, 245, 243], orange = [232, 151, 78], gray = [207, 217, 212];
-  const colors = [green, [111, 171, 151], orange, gray];
-  const pageBottom = 270;
+  const closure = data.closure || [
+    { name: "AI 自助解决", count: metrics.aiResolved || 0 },
+    { name: "人工已解决", count: metrics.humanResolved || 0 },
+    { name: "处理中", count: metrics.inProgress || 0 }
+  ];
+  const total = Math.max(closure.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
+  const max = Math.max(...closure.map((item) => safeNumber(item.count)), 1);
+  drawSectionTitle(pdf, "闭环状态", "与网页闭环卡片同步：AI 自助解决、人工已解决、处理中。", x + 7, y + 12, width - 14);
+  closure.forEach((item, index) => {
+    const rowY = y + 33 + index * 13;
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8.8);
+    pdf.text(item.name, x + 10, rowY);
+    drawBar(pdf, x + 45, rowY - 3.5, width - 115, safeNumber(item.count), max, CLOSURE_COLORS[index % CLOSURE_COLORS.length], 4.4);
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8.4);
+    pdf.text(`${item.count} 个`, x + width - 58, rowY, { align: "right" });
+    setText(pdf, PDF.muted);
+    pdf.text(`${percent(item.count, total)}%`, x + width - 14, rowY, { align: "right" });
+  });
+  drawDonut(pdf, closure, x + width - 34, y + 41, 20, CLOSURE_COLORS, { value: total, label: "会话", size: 15 });
+}
 
-  function ensureSpace(currentY, needed, title = "智能客服运营分析报告（续）") {
-    if (currentY + needed <= pageBottom) return currentY;
-    pdf.addPage();
-    pdf.setFont("SimHei"); pdf.setFillColor(...ink); pdf.rect(0, 0, 210, 24, "F");
-    pdf.setTextColor(255, 255, 255); pdf.setFontSize(15); pdf.text(title, 14, 16);
-    return 38;
+function drawRecommendationCard(pdf, item, index, x, y, width, height) {
+  drawCard(pdf, x, y, width, height, { fill: index === 0 ? [242, 249, 246] : PDF.white });
+  setFill(pdf, index === 0 ? PDF.green : PDF.ink);
+  pdf.roundedRect(x + 7, y + 8, 9, 9, 2, 2, "F");
+  setText(pdf, PDF.white);
+  pdf.setFontSize(8);
+  pdf.text(String(index + 1), x + 11.5, y + 14.2, { align: "center" });
+  setText(pdf, PDF.ink);
+  pdf.setFontSize(10);
+  pdf.text(item.title, x + 21, y + 12.6);
+  setText(pdf, PDF.muted);
+  drawTextBlock(pdf, item.text, x + 21, y + 20.5, width - 29, { fontSize: 8, lineHeight: 4.1 });
+}
+
+function drawTicketExamples(pdf, raw, x, y, width, height) {
+  drawCard(pdf, x, y, width, height);
+  drawSectionTitle(pdf, "人工工单样例", "用于复盘高风险转人工是否有明确处理结论。", x + 7, y + 11, width - 14);
+  const tickets = (raw.tickets || []).slice(0, 2);
+  if (!tickets.length) {
+    setText(pdf, PDF.muted);
+    pdf.setFontSize(8.8);
+    pdf.text("当前周期暂无人工工单", x + 7, y + 37);
+    return;
   }
+  tickets.forEach((ticket, index) => {
+    const rowY = y + 31 + index * 20;
+    setText(pdf, PDF.ink);
+    pdf.setFontSize(8.6);
+    pdf.text(`${priorityText(ticket.priority)} · ${statusText(ticket.status)} · ${ticket.id}`, x + 7, rowY);
+    setText(pdf, PDF.muted);
+    drawTextBlock(pdf, clipText(ticket.summary || ticket.handoffReason, 70), x + 7, rowY + 6, width - 14, { fontSize: 7.4, lineHeight: 3.5 });
+  });
+}
 
-  function sectionTitle(title, y) {
-    y = ensureSpace(y, 12);
-    pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text(title, 12, y);
-    return y + 10;
+function drawHeader(pdf, data, range) {
+  const metrics = data.metrics || {};
+  drawPageBackground(pdf);
+  drawCard(pdf, 10, 9, 277, 33, { fill: PDF.ink, stroke: PDF.ink, radius: 6 });
+  setText(pdf, [203, 237, 112]);
+  pdf.setFontSize(8.5);
+  pdf.text("SERVICE INTELLIGENCE", 18, 20);
+  setText(pdf, PDF.white);
+  pdf.setFontSize(21);
+  pdf.text("言析智能客服运营洞察报告", 18, 32);
+  setText(pdf, [213, 222, 218]);
+  pdf.setFontSize(8.2);
+  pdf.text(`统计周期 ${reportRange(range)} · 生成时间 ${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`, 145, 22);
+  pdf.text(`数据已脱敏 · 会话 ${metrics.sessions || 0} 次 · 消息 ${metrics.messages || 0} 条`, 145, 32);
+}
+
+function drawSubHeader(pdf, title, subtitle) {
+  drawPageBackground(pdf);
+  setFill(pdf, PDF.ink);
+  pdf.rect(0, 0, 297, 23, "F");
+  setText(pdf, PDF.white);
+  pdf.setFontSize(15);
+  pdf.text(title, 12, 15);
+  if (subtitle) {
+    setText(pdf, [213, 222, 218]);
+    pdf.setFontSize(8);
+    pdf.text(subtitle, 200, 15);
   }
+}
 
-  pdf.setFillColor(...ink); pdf.roundedRect(12, 12, 186, 36, 5, 5, "F");
-  pdf.setTextColor(203, 237, 112); pdf.setFontSize(8); pdf.text("YANXI SERVICE INTELLIGENCE", 20, 23);
-  pdf.setTextColor(255, 255, 255); pdf.setFontSize(22); pdf.text("智能客服运营分析报告", 20, 36);
-  pdf.setFontSize(8); pdf.setTextColor(213, 222, 218); pdf.text(`统计周期：${range.from} 至 ${range.to}  生成时间：${new Date().toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}`, 20, 43);
-
-  pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text("一、核心指标", 12, 60);
-  const metricItems = [["会话量", metrics.sessions || 0, "次"], ["AI 自助解决率", (metrics.solveRate || 0) + "%", ""], ["转人工率", (metrics.handoffRate || 0) + "%", ""], ["满意度", metrics.satisfaction || 0, "/5"]];
-  metricItems.forEach((item, index) => { const x = 12 + index * 47; pdf.setFillColor(255, 255, 255); pdf.setDrawColor(220, 228, 223); pdf.roundedRect(x, 65, 43, 28, 3, 3, "FD"); pdf.setFontSize(8); pdf.setTextColor(102, 117, 111); pdf.text(item[0], x + 4, 73); pdf.setFontSize(18); pdf.setTextColor(...ink); pdf.text(String(item[1]), x + 4, 86); pdf.setFontSize(7); pdf.setTextColor(102, 117, 111); pdf.text(item[2], x + 31, 86); });
-
-  let y = sectionTitle("二、意图分布 Top 7", 110);
-  const intents = (data.intents || []).slice(0, 7);
-  const intentMax = Math.max(...intents.map((item) => item.count), 1);
-  intents.forEach((item) => {
-    y = ensureSpace(y, 10);
-    pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(clipText(item.name, 18), 14, y);
-    pdf.setFillColor(235, 241, 238); pdf.roundedRect(58, y - 3.5, 104, 4.5, 2, 2, "F");
-    pdf.setFillColor(...green); pdf.roundedRect(58, y - 3.5, 104 * item.count / intentMax, 4.5, 2, 2, "F");
-    pdf.setFontSize(8); pdf.text(String(item.count), 170, y);
-    y += 10;
-  });
-
-  y = sectionTitle("三、知识缺口 Top 6", y + 6);
-  (data.knowledgeGaps || []).slice(0, 6).forEach((item) => {
-    const lines = pdf.splitTextToSize(String(item.question || ""), 145);
-    const rowHeight = Math.max(13, lines.length * 4.8 + 8);
-    y = ensureSpace(y, rowHeight + 3);
-    pdf.setFillColor(...pale); pdf.roundedRect(12, y - 5, 186, rowHeight, 3, 3, "F");
-    pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(lines, 17, y + 2);
-    pdf.setFontSize(8); pdf.text(`${item.count} 次`, 190, y + 2, { align: "right" });
-    y += rowHeight + 3;
-  });
-
-  y = sectionTitle("四、服务闭环", y + 7);
-  const closure = data.closure || [{ name: "AI 自助解决", count: metrics.aiResolved || 0 }, { name: "人工已解决", count: metrics.humanResolved || 0 }, { name: "处理中", count: metrics.inProgress || 0 }];
-  y = ensureSpace(y, 52);
-  const maxClosure = Math.max(...closure.map((item) => item.count), 1);
-  closure.forEach((item, index) => { const rowY = y + index * 12; pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text(item.name, 14, rowY); pdf.setFillColor(235, 241, 238); pdf.roundedRect(52, rowY - 3.5, 82, 5, 2.5, 2.5, "F"); pdf.setFillColor(...colors[index]); pdf.roundedRect(52, rowY - 3.5, 82 * item.count / maxClosure, 5, 2.5, 2.5, "F"); pdf.text(String(item.count), 140, rowY); });
-  drawDonut(pdf, closure, 168, y + 11, 18, colors);
-  y += 48;
-
-  pdf.addPage(); pdf.setFont("SimHei"); pdf.setFillColor(...ink); pdf.rect(0, 0, 210, 26, "F"); pdf.setFontSize(17); pdf.setTextColor(255, 255, 255); pdf.text("五、运营结论与改进建议", 14, 17);
-  y = 39;
-  recommendations(data, raw).forEach((item, index) => {
-    const lines = pdf.splitTextToSize(String(item || ""), 154);
-    const cardHeight = Math.max(24, lines.length * 5.2 + 14);
-    y = ensureSpace(y, cardHeight + 8, "五、运营结论与改进建议（续）");
-    pdf.setFillColor(...pale); pdf.roundedRect(12, y - 7, 186, cardHeight, 3, 3, "F");
-    pdf.setFillColor(...ink); pdf.roundedRect(17, y - 2, 9, 9, 2, 2, "F");
-    pdf.setTextColor(255, 255, 255); pdf.setFontSize(9); pdf.text(String(index + 1), 21.5, y + 4, { align: "center" });
-    pdf.setTextColor(...ink); pdf.setFontSize(9); pdf.text(lines, 31, y);
-    y += cardHeight + 8;
-  });
-
+function addFooters(pdf) {
   const pages = pdf.getNumberOfPages();
+  const { width, height } = pageSize(pdf);
   for (let page = 1; page <= pages; page += 1) {
-    pdf.setPage(page); pdf.setFont("SimHei");
-    pdf.setDrawColor(220, 228, 223); pdf.line(12, 274, 198, 274);
-    pdf.setTextColor(103, 118, 111); pdf.setFontSize(7); pdf.text("本报告按北京时间统计，数据已脱敏；正文为矢量文字，可搜索和复制。", 12, 281);
-    pdf.setTextColor(125, 135, 130); pdf.text(`${page} / ${pages}`, 198, 290, { align: "right" });
+    pdf.setPage(page);
+    setDraw(pdf, PDF.line);
+    pdf.line(10, height - 11, width - 10, height - 11);
+    setText(pdf, PDF.muted);
+    pdf.setFontSize(7.4);
+    pdf.text("本报告按北京时间统计，数据已脱敏；指标口径与运营洞察页面保持一致。", 10, height - 5);
+    pdf.text(`${page} / ${pages}`, width - 10, height - 5, { align: "right" });
   }
-  pdf.save(`言析智能客服_运营分析_${range.from}_${range.to}.pdf`);
+}
+
+export async function exportPdf(data, range, raw = {}, options = {}) {
+  const metrics = data.metrics || {};
+  const pdf = new jsPDF("l", "mm", "a4");
+  await installChineseFont(pdf, options.fontBytes);
+  pdf.setFont("SimHei", "normal");
+
+  drawHeader(pdf, data, range);
+
+  const metricCards = [
+    { label: "区间会话", value: metrics.sessions ?? 0, unit: "次", note: "进入统计周期的服务会话" },
+    { label: "AI 自助解决率", value: `${metrics.solveRate ?? 0}%`, unit: "", note: `${metrics.aiResolved || 0} 个会话由 AI 自助闭环`, tone: PDF.green },
+    { label: "转人工率", value: `${metrics.handoffRate ?? 0}%`, unit: "", note: `${metrics.handoffs || (raw.tickets || []).length || 0} 个工单进入人工处理` },
+    { label: "满意度", value: metrics.satisfaction ?? "--", unit: "/5", note: `${metrics.ratings || 0} 次评价参与计算` }
+  ];
+  metricCards.forEach((item, index) => drawMetricCard(pdf, item, 10 + index * 70, 50, 66, 37));
+
+  drawIntentCard(pdf, data, 10, 96, 136, 88);
+  drawKnowledgeCard(pdf, data, 153, 96, 134, 88);
+
+  pdf.addPage();
+  drawSubHeader(pdf, "闭环状态与改进建议", `统计周期 ${reportRange(range)}`);
+  drawClosureCard(pdf, data, 10, 34, 134, 67);
+  drawTicketExamples(pdf, raw, 153, 34, 134, 67);
+
+  const advice = recommendations(data, raw);
+  drawSectionTitle(pdf, "运营建议", "从知识缺口、意图分布、人工工单和评价中提炼下一步动作。", 10, 118, 270);
+  advice.forEach((item, index) => {
+    const x = index % 2 === 0 ? 10 : 153;
+    const y = 129 + Math.floor(index / 2) * 36;
+    drawRecommendationCard(pdf, item, index, x, y, 134, 31);
+  });
+
+  addFooters(pdf);
+  const filename = `言析智能客服_运营洞察报告_${range.from || "全部"}_${range.to || "全部"}.pdf`;
+  if (options.save !== false) pdf.save(filename);
+  return { pdf, filename };
 }
