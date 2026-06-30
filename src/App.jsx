@@ -40,6 +40,13 @@ function CustomerPage() {
   const [decision, setDecision] = useState(null);
   const [dismissedRefundPromptId, setDismissedRefundPromptId] = useState("");
   const listRef = useRef(null);
+  const scrollToBottom = (behavior = "smooth") => {
+    const list = listRef.current;
+    if (!list) return;
+    requestAnimationFrame(() => {
+      list.scrollTo({ top: list.scrollHeight, behavior });
+    });
+  };
 
   const isClosed = session?.status === "closed";
   const humanMode = isHumanSession(session);
@@ -100,7 +107,7 @@ function CustomerPage() {
   }, [session?.id, session?.status, busyMode]);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    scrollToBottom("smooth");
   }, [messages, busyMode]);
 
   async function startNewSession() {
@@ -136,6 +143,7 @@ function CustomerPage() {
     const clientMessageId = crypto.randomUUID();
     setInput("");
     setMessages((old) => [...old, { id: clientMessageId, role: "user", content: value, createdAt: beijingNow(), localStatus: "sending" }]);
+    scrollToBottom("auto");
     setBusyMode(sendToAgent ? "agent" : "ai");
     setDecision(sendToAgent ? humanDecision(session) : { phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
 
@@ -148,6 +156,7 @@ function CustomerPage() {
       setSession(data.session);
       setMessages(data.messages);
       setDecision(sendToAgent ? humanDecision(data.session) : (decisionFromMessages(data.messages) || decisionFromResult(data.decision)));
+      scrollToBottom("auto");
     } catch (error) {
       setMessages((old) => old.map((message) => message.id === clientMessageId ? { ...message, localStatus: "failed" } : message).concat({ id: crypto.randomUUID(), role: "system", content: `发送失败：${error.message}` }));
     } finally {
@@ -191,7 +200,6 @@ function CustomerPage() {
         if (next) { setSession(next.session); setMessages(next.messages || []); setDecision(decisionFromMessages(next.messages || [])); return; }
         return api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); setDecision(decisionFromMessages(d.messages)); });
       }} />}
-      {humanMode && <HandoffBanner session={session} />}
       {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>继续咨询请开启一个新的会话。</span><button onClick={startNewSession} disabled={isBusy}>新建会话</button></div>}
       {!humanMode && <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={!canUseQuick} onClick={() => send(text)}>{label}</button>)}</div>}
       <form className={`composer ${isClosed ? "closed" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
@@ -203,9 +211,7 @@ function CustomerPage() {
 
     <aside className={`decision-panel state-${servicePulseMode}`}>
       <p className="eyebrow">DECISION TRACE</p><h2>服务状态</h2>
-      <StatusFlow mode={servicePulseMode} phase={decision?.phase} />
-      {busyMode === "ai" && <div className="decision-progress"><i /><span>{progressLabel(decision?.phase)}</span></div>}
-      {busyMode === "agent" && <div className="decision-progress agent"><i /><span>正在写入人工工单</span></div>}
+      <StatusFlow mode={servicePulseMode} phase={decision?.phase} busy={Boolean(busyMode)} />
       <Decision label="当前阶段" value={panelDecision?.intent || statusTitle(busyMode)} />
       <Decision label="置信度" value={panelDecision?.confidence != null ? `${Math.round(panelDecision.confidence * 100)}%` : "--"} />
       <Decision label="信息来源" value={panelDecision?.source || "--"} />
@@ -217,25 +223,38 @@ function CustomerPage() {
   </main>;
 }
 
-function StatusFlow({ mode, phase }) {
-  const liveModes = ["booting", "new_session", "ai", "agent", "waiting_agent", "processing"];
-  const flowMap = {
-    booting: ["\u8fde\u63a5\u670d\u52a1", "\u6062\u590d\u4f1a\u8bdd", "\u51c6\u5907\u7a97\u53e3"],
-    new_session: ["\u5173\u95ed\u65e7\u4f1a\u8bdd", "\u521b\u5efa\u4f1a\u8bdd", "\u51c6\u5907\u8f93\u5165"],
-    ai: ["\u63a5\u6536\u95ee\u9898", "\u8bc6\u522b\u610f\u56fe", "\u751f\u6210\u56de\u590d"],
-    agent: ["\u521b\u5efa\u5de5\u5355", "\u7b49\u5f85\u63a5\u5165", "\u540c\u6b65\u6d88\u606f"],
-    waiting_agent: ["\u5de5\u5355\u5df2\u5efa", "\u7b49\u5f85\u63a5\u5165", "\u6301\u7eed\u540c\u6b65"],
-    processing: ["\u5ba2\u670d\u63a5\u5165", "\u4eba\u5de5\u5904\u7406\u4e2d", "\u540c\u6b65\u56de\u590d"],
-    closed: ["\u670d\u52a1\u7ed3\u675f", "\u5de5\u5355\u5173\u95ed", "\u53ef\u65b0\u4f1a\u8bdd"],
-    active: ["\u670d\u52a1\u5728\u7ebf", "\u7b49\u5f85\u8f93\u5165", "AI \u5f85\u547d"]
-  };
-  const phaseIndex = { submitting: 0, understanding: 1, routing: 1, generating: 2, saving: 2 };
-  const labels = flowMap[mode] || flowMap.active;
-  const activeIndex = mode === "ai" ? (phaseIndex[phase] ?? 0) : mode === "closed" ? 2 : ["agent", "waiting_agent"].includes(mode) ? 1 : mode === "processing" ? 1 : liveModes.includes(mode) ? 0 : 0;
-  const live = liveModes.includes(mode);
-  return <div className={`status-flow ${mode} ${live ? "is-live" : "is-stable"}`} aria-label="\u670d\u52a1\u72b6\u6001\u52a0\u8f7d\u8fdb\u5ea6">
-    <div className="status-flow-bar"><i /></div>
-    <div className="status-flow-steps">{labels.map((label, index) => <span key={label} className={index <= activeIndex ? "done" : ""}><b />{label}</span>)}</div>
+function StatusFlow({ mode, phase, busy }) {
+  const currentMode = mode || "active";
+  const phaseIndex = { submitting: 0, understanding: 1, routing: 2, generating: 3, saving: 4 };
+  const aiActive = currentMode === "ai" && busy;
+  const aiSteps = [
+    ["接收问题", "保存用户输入"],
+    ["识别意图", "判断售后类型和风险"],
+    ["匹配路径", "查询订单、规则或转人工"],
+    ["生成回复", "组织可执行处理结果"],
+    ["同步记录", "更新会话和业务状态"]
+  ];
+  const agentSteps = currentMode === "waiting_agent"
+    ? [["工单已创建", "当前会话已进入人工队列"], ["等待接入", "客服接入前可继续补充信息"], ["AI 已停止", "补充内容只进入同一工单"]]
+    : [["客服已接入", "工单处于处理中"], ["等待回复", "用户补充会同步到工单"], ["关闭后结束", "完成后会话进入闭环"]];
+  const stableSteps = currentMode === "closed"
+    ? [["服务已结束", "会话和关联工单已关闭"], ["不可继续追问", "继续咨询需要新建会话"], ["评价已记录", "反馈进入运营洞察"]]
+    : [["服务在线", "可以输入售后问题"], ["AI 优先处理", "先查订单、规则和退款进度"], ["必要时转人工", "投诉或高风险问题交给客服"]];
+  const steps = aiActive ? aiSteps : ["waiting_agent", "processing", "agent"].includes(currentMode) ? agentSteps : stableSteps;
+  const activeIndex = aiActive ? (phaseIndex[phase] ?? 0) : currentMode === "closed" ? steps.length - 1 : ["waiting_agent", "agent"].includes(currentMode) ? 1 : currentMode === "processing" ? 1 : 0;
+  const percent = aiActive ? [18, 38, 58, 78, 92][activeIndex] : currentMode === "closed" ? 100 : ["waiting_agent", "agent"].includes(currentMode) ? 66 : currentMode === "processing" ? 72 : 100;
+  const title = aiActive ? `当前阶段：${steps[activeIndex][0]}` : statusLabel(currentMode === "agent" ? "waiting_agent" : currentMode);
+  const caption = aiActive ? steps[activeIndex][1] : steps[Math.min(activeIndex, steps.length - 1)][1];
+
+  return <div className={`status-process ${currentMode} ${aiActive ? "is-loading" : ""}`} aria-label="服务状态处理过程">
+    <div className="status-process-head">
+      <div><span>{aiActive ? "AI 处理中" : "当前状态"}</span><strong>{title}</strong><small>{caption}</small></div>
+      <b>{percent}%</b>
+    </div>
+    <ol>{steps.map(([name, detail], index) => <li key={name} className={index < activeIndex ? "done" : index === activeIndex ? "current" : "todo"}>
+      <i />
+      <span><strong>{name}</strong><small>{detail}</small></span>
+    </li>)}</ol>
   </div>;
 }
 
@@ -320,6 +339,7 @@ function AgentPage() {
   const [statusFilter, setStatusFilter] = useState("active");
   const [loadError, setLoadError] = useState("");
   const [confirmClose, setConfirmClose] = useState(null);
+  const timelineRef = useRef(null);
 
   const refresh = async () => {
     try {
@@ -337,7 +357,12 @@ function AgentPage() {
   const filteredTickets = tickets
     .filter((ticket) => priorityFilter === "all" || (priorityFilter === "normal" ? ticket.priority !== "high" : ticket.priority === priorityFilter))
     .filter((ticket) => statusFilter === "all" || (statusFilter === "active" ? ["open", "processing"].includes(ticket.status) : ticket.status === statusFilter));
-  const selected = filteredTickets.find((t) => t.id === selectedId) || filteredTickets[0];
+  const selected = tickets.find((t) => t.id === selectedId) || filteredTickets[0];
+  useEffect(() => {
+    const list = timelineRef.current;
+    if (!list) return;
+    requestAnimationFrame(() => list.scrollTo({ top: list.scrollHeight, behavior: "smooth" }));
+  }, [selected?.id, selected?.messages?.length]);
 
   async function act(fn) { await fn(); await refresh(); }
   async function sendReply() {
@@ -374,7 +399,7 @@ function AgentPage() {
       <div className="ticket-context compact"><div><small>转人工原因</small><strong>{selected.handoffReason || "需要人工核实"}</strong></div><div><small>优先级</small><strong>{priorityLabel(selected.priority)}</strong></div><div><small>当前状态</small><strong>{statusLabel(selected.status)}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div></div>
       <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
-      <div className="timeline">{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
+      <div className="timeline" ref={timelineRef}>{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
       <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复，Enter 发送…"} /><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送</button></div>
     </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
     {confirmClose && <div className="modal-backdrop"><div className="modal confirm-modal">
