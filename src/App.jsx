@@ -224,7 +224,6 @@ function CustomerPage() {
     <aside className={`decision-panel state-${servicePulseMode}`}>
       <p className="eyebrow">DECISION TRACE</p><h2>服务状态</h2>
       <StatusFlow mode={servicePulseMode} phase={decision?.phase} busy={Boolean(busyMode)} />
-      <Decision label="当前阶段" value={panelDecision?.intent || statusTitle(busyMode)} />
       <Decision label="置信度" value={panelDecision?.confidence != null ? `${Math.round(panelDecision.confidence * 100)}%` : "--"} />
       <Decision label="信息来源" value={panelDecision?.source || "--"} />
       <Decision label="下一动作" value={busyMode === "ai" ? ((decision || {}).action || "处理中") : actionLabel(panelDecision?.action)} />
@@ -254,7 +253,7 @@ function StatusFlow({ mode, phase, busy }) {
     : [["服务在线", "可以输入售后问题"], ["AI 优先处理", "先查订单、规则和退款进度"], ["必要时转人工", "投诉或高风险问题交给客服"]];
   const steps = aiActive ? aiSteps : ["waiting_agent", "processing", "agent"].includes(currentMode) ? agentSteps : stableSteps;
   const activeIndex = aiActive ? (phaseIndex[phase] ?? 0) : currentMode === "closed" ? steps.length - 1 : ["waiting_agent", "agent"].includes(currentMode) ? 1 : currentMode === "processing" ? 1 : 0;
-  const title = aiActive ? `当前阶段：${steps[activeIndex][0]}` : statusLabel(currentMode === "agent" ? "waiting_agent" : currentMode);
+  const title = aiActive ? steps[activeIndex][0] : statusLabel(currentMode === "agent" ? "waiting_agent" : currentMode);
   const caption = aiActive ? steps[activeIndex][1] : steps[Math.min(activeIndex, steps.length - 1)][1];
 
   return <div className={`status-process ${currentMode} ${aiActive ? "is-loading" : ""}`} aria-label="服务状态处理过程">
