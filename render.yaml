@@ -1,7 +1,8 @@
 services:
   - type: web
-    name: smart-customer-service-api
+    name: smart-customer-service-api-sg
     runtime: node
+    region: singapore
     plan: free
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile
@@ -29,7 +30,7 @@ services:
       - key: NODE_VERSION
         value: 22
       - key: VITE_API_BASE
-        value: https://smart-customer-service-api.onrender.com
+        value: https://smart-customer-service-api-sg.onrender.com
     routes:
       - type: rewrite
         source: /*
