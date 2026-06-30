@@ -609,17 +609,20 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .status-process-head b {
   flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e8f5ef;
   color: var(--green);
-  font-size: 30px;
+  padding: 6px 10px;
+  font-size: 12px;
   line-height: 1;
-  letter-spacing: -.03em;
+  white-space: nowrap;
 }
 .status-process.agent .status-process-head b,
 .status-process.waiting_agent .status-process-head b,
 .status-process.processing .status-process-head b {
-  color: #d1792a;
-}
-.status-process ol {
+  background: #fff3e6;
+  color: #b86620;
+}.status-process ol {
   list-style: none;
   margin: 14px 0 0;
   padding: 0;
@@ -688,10 +691,4 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .status-process li.todo small { color: #a0aaa5; }
 .status-process.is-loading li.current i {
   animation: statusNodePulse 1s ease-out infinite;
-}
-.status-process.is-loading .status-process-head b {
-  animation: processPercentPulse 1.2s ease-in-out infinite;
-}
-@keyframes processPercentPulse {
-  50% { transform: scale(1.04); opacity: .78; }
 }

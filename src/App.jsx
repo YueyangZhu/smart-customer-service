@@ -40,12 +40,19 @@ function CustomerPage() {
   const [decision, setDecision] = useState(null);
   const [dismissedRefundPromptId, setDismissedRefundPromptId] = useState("");
   const listRef = useRef(null);
+  const shouldStickToBottomRef = useRef(true);
+  const lastMessageCountRef = useRef(0);
   const scrollToBottom = (behavior = "smooth") => {
     const list = listRef.current;
     if (!list) return;
     requestAnimationFrame(() => {
       list.scrollTo({ top: list.scrollHeight, behavior });
     });
+  };
+  const rememberScrollIntent = () => {
+    const list = listRef.current;
+    if (!list) return;
+    shouldStickToBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   };
 
   const isClosed = session?.status === "closed";
@@ -107,7 +114,11 @@ function CustomerPage() {
   }, [session?.id, session?.status, busyMode]);
 
   useEffect(() => {
-    scrollToBottom("smooth");
+    const count = messages.length;
+    const hasNewMessage = count > lastMessageCountRef.current;
+    lastMessageCountRef.current = count;
+    if (!hasNewMessage && busyMode) return;
+    if (shouldStickToBottomRef.current || count <= 1) scrollToBottom("smooth");
   }, [messages, busyMode]);
 
   async function startNewSession() {
@@ -142,6 +153,7 @@ function CustomerPage() {
     const sendToAgent = isHumanSession(session);
     const clientMessageId = crypto.randomUUID();
     setInput("");
+    shouldStickToBottomRef.current = true;
     setMessages((old) => [...old, { id: clientMessageId, role: "user", content: value, createdAt: beijingNow(), localStatus: "sending" }]);
     scrollToBottom("auto");
     setBusyMode(sendToAgent ? "agent" : "ai");
@@ -189,7 +201,7 @@ function CustomerPage() {
         <button disabled={!session || isBusy} onClick={isClosed ? startNewSession : () => setRatingOpen(true)}>{isClosed ? "新建会话" : "结束并评价"}</button>
       </div>
       {chatProgress && <div className={`chat-progress ${busyMode}`}><i /><span>{chatProgress}</span></div>}
-      <div className="message-list" ref={listRef}>
+      <div className="message-list" ref={listRef} onScroll={rememberScrollIntent}>
         {busyMode === "booting" && <ServiceState title="正在连接售后服务" text="系统会自动恢复未完成会话，或为你打开新的服务窗口。" />}
         {busyMode === "new_session" && <ServiceState title="正在打开新会话" text="新会话会直接加载，不会把旧会话内容带进来。" />}
         {!busyMode && !messages.length && <ServiceState title="可以开始咨询了" text="输入订单号和问题，系统会判断是直接回复、售后申请还是转人工。" />}
@@ -242,14 +254,13 @@ function StatusFlow({ mode, phase, busy }) {
     : [["服务在线", "可以输入售后问题"], ["AI 优先处理", "先查订单、规则和退款进度"], ["必要时转人工", "投诉或高风险问题交给客服"]];
   const steps = aiActive ? aiSteps : ["waiting_agent", "processing", "agent"].includes(currentMode) ? agentSteps : stableSteps;
   const activeIndex = aiActive ? (phaseIndex[phase] ?? 0) : currentMode === "closed" ? steps.length - 1 : ["waiting_agent", "agent"].includes(currentMode) ? 1 : currentMode === "processing" ? 1 : 0;
-  const percent = aiActive ? [18, 38, 58, 78, 92][activeIndex] : currentMode === "closed" ? 100 : ["waiting_agent", "agent"].includes(currentMode) ? 66 : currentMode === "processing" ? 72 : 100;
   const title = aiActive ? `当前阶段：${steps[activeIndex][0]}` : statusLabel(currentMode === "agent" ? "waiting_agent" : currentMode);
   const caption = aiActive ? steps[activeIndex][1] : steps[Math.min(activeIndex, steps.length - 1)][1];
 
   return <div className={`status-process ${currentMode} ${aiActive ? "is-loading" : ""}`} aria-label="服务状态处理过程">
     <div className="status-process-head">
       <div><span>{aiActive ? "AI 处理中" : "当前状态"}</span><strong>{title}</strong><small>{caption}</small></div>
-      <b>{percent}%</b>
+      <b>{aiActive ? "处理中" : "已同步"}</b>
     </div>
     <ol>{steps.map(([name, detail], index) => <li key={name} className={index < activeIndex ? "done" : index === activeIndex ? "current" : "todo"}>
       <i />
