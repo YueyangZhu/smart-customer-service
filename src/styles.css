@@ -850,3 +850,23 @@ button:disabled { cursor: not-allowed; opacity: .5; }
     width: 100%;
   }
 }
+/* v1.7 analytics metric consistency and density */
+.analytics .date-range label {
+  gap: 0;
+  font-size: 0;
+}
+.analytics .date-range input {
+  font-size: 12px;
+}
+.analytics-grid {
+  align-items: start;
+}
+.analytics-grid article:not(.wide) {
+  min-height: 0;
+}
+.analytics-grid article:first-child {
+  padding-bottom: 18px;
+}
+.analytics-grid article:first-child .bars > div:last-child {
+  margin-bottom: 0;
+}

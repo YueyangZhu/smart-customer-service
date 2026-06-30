@@ -385,7 +385,7 @@ function buildDashboard({ sessions, messages, tickets, ratings, gaps }, range = 
   const inProgress = Math.max(0, s.length - aiResolved - humanResolved);
   return {
     range: { from: range.from || "", to: range.to || "", timeZone: "Asia/Shanghai" },
-    metrics: { sessions: s.length, solveRate: Math.round(solved / total * 100), handoffRate: Math.round(t.length / total * 100), satisfaction: Number(avg.toFixed(1)), messages: m.length, aiHandled: m.filter((item) => item.role === "assistant").length, handoffs: t.length, ratings: r.length, aiResolved, humanResolved, inProgress },
+    metrics: { sessions: s.length, solveRate: Math.round(aiResolved / total * 100), handoffRate: Math.round(t.length / total * 100), satisfaction: Number(avg.toFixed(1)), messages: m.length, aiHandled: m.filter((item) => item.role === "assistant").length, handoffs: t.length, ratings: r.length, aiResolved, humanResolved, inProgress },
     intents: Object.entries(counts).map(([name, count]) => ({ name, count, percent: Math.round(count / max * 100) })),
     knowledgeGaps: withinBeijingRange(gaps, range).sort((a, b) => b.count - a.count),
     closure: [{ name: "AI 自助解决", count: aiResolved }, { name: "人工已解决", count: humanResolved }, { name: "处理中", count: inProgress }]
