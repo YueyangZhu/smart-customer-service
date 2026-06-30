@@ -458,3 +458,121 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .message-list { max-height: 450px; }
   .refund-card { grid-template-columns: 1fr; }
 }
+
+/* v1.6 closure and status clarity */
+.chat-title-block { min-width: 0; display: grid; gap: 4px; }
+.chat-title-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chat-title-row .status { font-size: 10px; font-weight: 900; }
+.status.processing { background: #dff3eb; color: #08765a; }
+.status.closed { background: #e9edf0; color: #52616b; }
+.detail-badges.prominent { margin-top: 0; }
+.detail-badges.prominent i { font-size: 12px; padding: 7px 10px; border-radius: 999px; font-weight: 900; }
+.detail-badges.prominent i.high { background: #ffe1e1; color: #b72424; box-shadow: inset 0 0 0 1px #ffc4c4; }
+.detail-badges.prominent .ticket-status.open { background: #fff1d9; color: #9b6114; box-shadow: inset 0 0 0 1px #f1d39b; }
+.detail-badges.prominent .ticket-status.processing { background: #dff3eb; color: #08765a; box-shadow: inset 0 0 0 1px #b9dfd0; }
+.detail-badges.prominent .ticket-status.closed { background: #e9edf0; color: #52616b; box-shadow: inset 0 0 0 1px #d2dce2; }
+.confirm-modal p:not(.eyebrow) { color: var(--muted); line-height: 1.7; }
+.modal-actions .danger { border: 0; background: #c94747; color: #fff; font-weight: 900; }
+@media (max-width: 760px) { .chat-title-row { flex-wrap: wrap; } .detail-badges.prominent { flex-wrap: wrap; } }
+
+
+/* v1.7 visible service-state loading */
+.decision-panel {
+  position: relative;
+  overflow: hidden;
+}
+.decision-panel.state-booting,
+.decision-panel.state-new_session,
+.decision-panel.state-ai,
+.decision-panel.state-agent,
+.decision-panel.state-waiting_agent,
+.decision-panel.state-processing {
+  border-color: rgba(11, 114, 88, .28);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.5), 0 18px 46px rgba(11, 114, 88, .10);
+}
+.decision-panel.state-agent,
+.decision-panel.state-waiting_agent {
+  border-color: rgba(239, 143, 69, .38);
+}
+.status-flow {
+  margin: -8px 0 16px;
+  padding: 13px;
+  border-radius: 15px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(255,255,255,.78);
+}
+.status-flow-bar {
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: #dce8e2;
+  box-shadow: inset 0 1px 2px rgba(20, 33, 43, .08);
+}
+.status-flow-bar i {
+  display: block;
+  width: 46%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), #4fc398, var(--lime));
+  box-shadow: 0 0 16px rgba(11, 114, 88, .28);
+}
+.status-flow.agent .status-flow-bar i,
+.status-flow.waiting_agent .status-flow-bar i {
+  background: linear-gradient(90deg, #cf7a2e, #f0a45d, #ffd7a1);
+  box-shadow: 0 0 16px rgba(239, 143, 69, .26);
+}
+.status-flow.is-live .status-flow-bar i {
+  animation: statusSweep 1.15s ease-in-out infinite alternate;
+}
+.status-flow.is-stable .status-flow-bar i {
+  width: 100%;
+  animation: none;
+}
+.status-flow.active .status-flow-bar i {
+  width: 32%;
+}
+.status-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.status-flow-steps span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #87938e;
+  font-size: 11px;
+  font-weight: 800;
+}
+.status-flow-steps b {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: #cfdad5;
+}
+.status-flow-steps .done {
+  color: var(--ink);
+}
+.status-flow-steps .done b {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(11, 114, 88, .12);
+}
+.status-flow.agent .status-flow-steps .done b,
+.status-flow.waiting_agent .status-flow-steps .done b {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(239, 143, 69, .15);
+}
+.status-flow.is-live .status-flow-steps .done:last-child b {
+  animation: statusNodePulse 1s ease-out infinite;
+}
+@keyframes statusSweep {
+  from { width: 34%; transform: translateX(0); }
+  to { width: 72%; transform: translateX(38%); }
+}
+@keyframes statusNodePulse {
+  70% { box-shadow: 0 0 0 9px rgba(11, 114, 88, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(11, 114, 88, 0); }
+}

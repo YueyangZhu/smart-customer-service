@@ -159,6 +159,7 @@ function CustomerPage() {
   const canUseQuick = canType && !humanMode;
   const chatSubtitle = humanMode ? "人工正在跟进 · 新消息会进入同一工单" : "AI 优先响应 · 复杂问题转人工接管";
   const chatProgress = busyMode === "ai" ? progressLabel(decision?.phase) : busyMode === "agent" ? "正在同步给人工客服" : "";
+  const servicePulseMode = busyMode || (isClosed ? "closed" : session?.status === "waiting_agent" ? "waiting_agent" : session?.status === "processing" ? "processing" : "active");
   const showRefundCard = lastAi?.action === "show_refund_form" && !isClosed && !humanMode && !isBusy && dismissedRefundPromptId !== lastAi.id;
 
   return <main className="customer-layout">
@@ -172,7 +173,10 @@ function CustomerPage() {
 
     <section className="chat-card">
       <div className="chat-heading">
-        <div><b>售后服务助手</b><span>{chatSubtitle}</span></div>
+        <div className="chat-title-block">
+          <div className="chat-title-row"><b>售后服务助手</b><span className={`status ${session?.status || "active"}`}>{statusLabel(session?.status)}</span></div>
+          <span>{chatSubtitle}</span>
+        </div>
         <button disabled={!session || isBusy} onClick={isClosed ? startNewSession : () => setRatingOpen(true)}>{isClosed ? "新建会话" : "结束并评价"}</button>
       </div>
       {chatProgress && <div className={`chat-progress ${busyMode}`}><i /><span>{chatProgress}</span></div>}
@@ -192,13 +196,14 @@ function CustomerPage() {
       {!humanMode && <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={!canUseQuick} onClick={() => send(text)}>{label}</button>)}</div>}
       <form className={`composer ${isClosed ? "closed" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
         <textarea disabled={!canType} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={composerPlaceholder({ isClosed, humanMode, busyMode })} rows="2" />
-        <small className="keyboard-hint">{composerHint({ isClosed, humanMode, busyMode })}</small>
-        <button disabled={!canType || !input.trim()}>{humanMode ? "补充给客服" : "发送"}</button>
+        <small className="keyboard-hint">{composerHint()}</small>
+        <button disabled={!canType || !input.trim()}>发送</button>
       </form>
     </section>
 
-    <aside className="decision-panel">
+    <aside className={`decision-panel state-${servicePulseMode}`}>
       <p className="eyebrow">DECISION TRACE</p><h2>服务状态</h2>
+      <StatusFlow mode={servicePulseMode} phase={decision?.phase} />
       {busyMode === "ai" && <div className="decision-progress"><i /><span>{progressLabel(decision?.phase)}</span></div>}
       {busyMode === "agent" && <div className="decision-progress agent"><i /><span>正在写入人工工单</span></div>}
       <Decision label="当前阶段" value={panelDecision?.intent || statusTitle(busyMode)} />
@@ -210,6 +215,28 @@ function CustomerPage() {
     </aside>
     {ratingOpen && <RatingModal session={session} onClose={() => setRatingOpen(false)} onSubmitted={() => api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); })} />}
   </main>;
+}
+
+function StatusFlow({ mode, phase }) {
+  const liveModes = ["booting", "new_session", "ai", "agent", "waiting_agent", "processing"];
+  const flowMap = {
+    booting: ["\u8fde\u63a5\u670d\u52a1", "\u6062\u590d\u4f1a\u8bdd", "\u51c6\u5907\u7a97\u53e3"],
+    new_session: ["\u5173\u95ed\u65e7\u4f1a\u8bdd", "\u521b\u5efa\u4f1a\u8bdd", "\u51c6\u5907\u8f93\u5165"],
+    ai: ["\u63a5\u6536\u95ee\u9898", "\u8bc6\u522b\u610f\u56fe", "\u751f\u6210\u56de\u590d"],
+    agent: ["\u521b\u5efa\u5de5\u5355", "\u7b49\u5f85\u63a5\u5165", "\u540c\u6b65\u6d88\u606f"],
+    waiting_agent: ["\u5de5\u5355\u5df2\u5efa", "\u7b49\u5f85\u63a5\u5165", "\u6301\u7eed\u540c\u6b65"],
+    processing: ["\u5ba2\u670d\u63a5\u5165", "\u4eba\u5de5\u5904\u7406\u4e2d", "\u540c\u6b65\u56de\u590d"],
+    closed: ["\u670d\u52a1\u7ed3\u675f", "\u5de5\u5355\u5173\u95ed", "\u53ef\u65b0\u4f1a\u8bdd"],
+    active: ["\u670d\u52a1\u5728\u7ebf", "\u7b49\u5f85\u8f93\u5165", "AI \u5f85\u547d"]
+  };
+  const phaseIndex = { submitting: 0, understanding: 1, routing: 1, generating: 2, saving: 2 };
+  const labels = flowMap[mode] || flowMap.active;
+  const activeIndex = mode === "ai" ? (phaseIndex[phase] ?? 0) : mode === "closed" ? 2 : ["agent", "waiting_agent"].includes(mode) ? 1 : mode === "processing" ? 1 : liveModes.includes(mode) ? 0 : 0;
+  const live = liveModes.includes(mode);
+  return <div className={`status-flow ${mode} ${live ? "is-live" : "is-stable"}`} aria-label="\u670d\u52a1\u72b6\u6001\u52a0\u8f7d\u8fdb\u5ea6">
+    <div className="status-flow-bar"><i /></div>
+    <div className="status-flow-steps">{labels.map((label, index) => <span key={label} className={index <= activeIndex ? "done" : ""}><b />{label}</span>)}</div>
+  </div>;
 }
 
 function HandoffBanner({ session }) {
@@ -292,6 +319,7 @@ function AgentPage() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active");
   const [loadError, setLoadError] = useState("");
+  const [confirmClose, setConfirmClose] = useState(null);
 
   const refresh = async () => {
     try {
@@ -317,11 +345,12 @@ function AgentPage() {
     await act(async () => { await api.replyTicket(selected.id, reply); setReply(""); });
   }
   async function closeSelectedTicket() {
-    if (!selected || selected.status !== "processing") return;
-    await api.closeTicket(selected.id);
-    setStatusFilter("closed");
-    setSelectedId(selected.id);
+    const ticketToClose = confirmClose || selected;
+    if (!ticketToClose || ticketToClose.status !== "processing") return;
+    await api.closeTicket(ticketToClose.id);
+    setSelectedId(ticketToClose.id);
     setReply("");
+    setConfirmClose(null);
     await refresh();
   }
 
@@ -341,13 +370,19 @@ function AgentPage() {
       </button>) : <div className="empty-list">当前筛选下没有工单</div>}</div>
     </aside>
     <section className="ticket-detail">{selected ? <>
-      <header><div className="ticket-title-block"><p className="eyebrow">TICKET {selected.id}</p><div className="ticket-title-row"><h2>{selected.intent}</h2></div><p className="ticket-subtitle">最近更新 {formatTime(selected.updatedAt || selected.createdAt)}</p></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={closeSelectedTicket}>关闭工单</button>}</div></header>
+      <header><div className="ticket-title-block"><p className="eyebrow">TICKET {selected.id}</p><div className="ticket-title-row"><h2>{selected.intent}</h2><span className="detail-badges prominent"><i className={selected.priority}>{priorityLabel(selected.priority)}</i><i className={`ticket-status ${selected.status}`}>{statusLabel(selected.status)}</i></span></div><p className="ticket-subtitle">最近更新 {formatTime(selected.updatedAt || selected.createdAt)}</p></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => setConfirmClose(selected)}>关闭工单</button>}</div></header>
       <div className="ticket-context compact"><div><small>转人工原因</small><strong>{selected.handoffReason || "需要人工核实"}</strong></div><div><small>优先级</small><strong>{priorityLabel(selected.priority)}</strong></div><div><small>当前状态</small><strong>{statusLabel(selected.status)}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div></div>
       <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
       <div className="timeline">{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
       <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复，Enter 发送…"} /><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送</button></div>
     </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
+    {confirmClose && <div className="modal-backdrop"><div className="modal confirm-modal">
+      <p className="eyebrow">CLOSE TICKET</p>
+      <h2>确认关闭工单？</h2>
+      <p>关闭后当前会话会结束，用户需要新建会话才能继续咨询。</p>
+      <div className="modal-actions"><button onClick={() => setConfirmClose(null)}>取消</button><button className="danger" onClick={closeSelectedTicket}>确认关闭</button></div>
+    </div></div>}
   </main>;
 }
 
@@ -428,10 +463,8 @@ function composerPlaceholder({ isClosed, humanMode, busyMode }) {
   if (humanMode) return "补充给客服的内容会进入同一个工单…";
   return "请描述你的售后问题，可附上订单号…";
 }
-function composerHint({ isClosed, humanMode, busyMode }) {
-  if (isClosed) return "旧会话已锁定";
-  if (busyMode) return "请稍等，正在处理当前操作";
-  return humanMode ? "Enter 补充给客服 · AI 不再自动回复" : "Enter 发送 · Shift+Enter 换行";
+function composerHint() {
+  return "Enter 发送 / Shift+Enter 换行";
 }
 function statusLabel(status) { return ({ active: "服务中", waiting_agent: "等待人工", open: "待接入", processing: "处理中", closed: "已关闭" })[status] || "服务中"; }
 function priorityLabel(priority) { return priority === "high" ? "紧急" : "普通"; }

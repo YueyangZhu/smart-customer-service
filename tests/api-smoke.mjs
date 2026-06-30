@@ -75,9 +75,25 @@ try {
   });
   if (handoff.body.session.status !== "waiting_agent") throw new Error("转人工测试失败");
 
+  const ratingSession = await json("/api/sessions", { method: "POST" });
+  const ratingHandoff = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: ratingSession.body.session.id, message: "我要找人工客服" })
+  });
+  if (ratingHandoff.body.session.status !== "waiting_agent") throw new Error("rating handoff setup failed");
+  const ratingTicketId = ratingHandoff.body.session.ticketId;
+  const rating = await json("/api/ratings", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: ratingSession.body.session.id, score: 4, resolved: true, comment: "closed by user review" })
+  });
+  if (rating.response.status !== 201) throw new Error("rating submit failed");
+  const ticketsAfterRating = await json("/api/agent/tickets");
+  const closedByRating = ticketsAfterRating.body.tickets?.find((ticket) => ticket.id === ratingTicketId);
+  if (closedByRating?.status !== "closed") throw new Error("rating should auto-close unclaimed ticket");
+
   const tickets = await json("/api/agent/tickets");
-  const ticketId = tickets.body.tickets?.[0]?.id;
-  if (!ticketId) throw new Error("工单创建测试失败");
+  const ticketId = handoff.body.session.ticketId;
+  if (!tickets.body.tickets?.some((ticket) => ticket.id === ticketId)) throw new Error("ticket creation failed");
 
   const earlyReply = await json(`/api/agent/tickets/${ticketId}/reply`, { method: "POST", body: JSON.stringify({ content: "提前回复" }) });
   if (earlyReply.response.status !== 409) throw new Error("未接入禁用回复测试失败");

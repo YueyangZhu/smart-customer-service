@@ -476,6 +476,10 @@ app.post("/api/ratings", async (req, res, next) => {
     const session = await store.getSession(sessionId);
     if (!session || !Number.isInteger(score) || score < 1 || score > 5) return res.status(400).json({ message: "评价信息无效" });
     const rating = await store.addRating({ id: id("RT"), sessionId, score, resolved: Boolean(resolved), comment, createdAt: now() });
+    if (session.ticketId) {
+      const ticket = await store.getTicket(session.ticketId);
+      if (ticket && ticket.status !== "closed") await store.updateTicket(ticket.id, { status: "closed", closedAt: now() });
+    }
     await store.updateSession(session.id, { resolved: rating.resolved, status: "closed" });
     res.status(201).json({ rating });
   } catch (error) { next(error); }
