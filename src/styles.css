@@ -435,3 +435,26 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .agent-composer.inline.locked button { height: 40px; }
 @media (max-width: 1100px) { .ticket-context.compact { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .chat-progress { padding: 8px 16px; } .ticket-context.compact { grid-template-columns: 1fr; } }
+
+/* v1.5 stable customer workflow */
+.customer-layout { height: calc(100vh - 76px); min-height: 0; overflow: hidden; }
+.chat-card { height: 100%; min-height: 0; }
+.message-list { flex: 1 1 auto; min-height: 0; max-height: none; }
+.intro-panel, .decision-panel { min-height: 0; overflow: hidden; }
+.refund-card { grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1fr) minmax(150px, .9fr) auto auto; margin: 0 18px 8px; padding: 10px 12px; gap: 8px; }
+.refund-card-title { min-width: 0; display: grid; gap: 2px; }
+.refund-card-title b { font-size: 14px; }
+.refund-card-title span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.refund-card .ghost { background: #eef3f0; color: #44554e; }
+.refund-card small { grid-column: 1 / -1; padding-left: 2px; }
+.quick-row { flex: 0 0 auto; }
+.composer { flex: 0 0 auto; }
+@media (max-width: 1100px) {
+  .customer-layout { grid-template-columns: 250px minmax(0, 1fr); }
+  .intro-panel { overflow-y: auto; }
+}
+@media (max-width: 760px) {
+  .customer-layout { height: auto; min-height: calc(100vh - 76px); overflow: visible; }
+  .message-list { max-height: 450px; }
+  .refund-card { grid-template-columns: 1fr; }
+}

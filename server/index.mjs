@@ -61,11 +61,27 @@ const memory = {
 };
 
 const now = () => new Date().toISOString();
-const id = (prefix) => `${prefix}${Date.now()}${Math.floor(Math.random() * 90 + 10)}`;
+const id = (prefix) => `${prefix}${Date.now()}${randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
 const findOrderNo = (text) => text.match(/OD\d{11}/i)?.[0]?.toUpperCase() || "";
 
 function toSnake(value) {
   return value.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
+}
+
+const tableColumns = {
+  sessions: new Set(["id", "userId", "cozeConversationId", "status", "resolved", "ticketId", "createdAt", "updatedAt"]),
+  messages: new Set(["id", "sessionId", "role", "content", "intent", "confidence", "action", "source", "riskLevel", "orderNo", "needHandoff", "handoffReason", "createdAt"]),
+  orders: new Set(["id", "product", "amount", "status", "logistics", "refund", "refundable", "createdAt", "updatedAt"]),
+  refunds: new Set(["id", "sessionId", "orderNo", "reason", "status", "createdAt", "updatedAt"]),
+  tickets: new Set(["id", "sessionId", "intent", "confidence", "summary", "handoffReason", "priority", "status", "agent", "claimedAt", "closedAt", "createdAt", "updatedAt"]),
+  ticket_replies: new Set(["id", "ticketId", "sessionId", "content", "createdAt"]),
+  ratings: new Set(["id", "sessionId", "score", "resolved", "comment", "createdAt"]),
+  knowledge_gaps: new Set(["id", "question", "count", "status", "createdAt", "updatedAt"])
+};
+
+function allowedEntries(table, data) {
+  const allowed = tableColumns[table];
+  return Object.entries(data).filter(([key, value]) => value !== undefined && (!allowed || allowed.has(key)));
 }
 
 function camelize(row = {}) {
@@ -94,7 +110,7 @@ async function query(sql, params = []) {
 }
 
 async function insert(table, data) {
-  const entries = Object.entries(data).filter(([, value]) => value !== undefined);
+  const entries = allowedEntries(table, data);
   const columns = entries.map(([key]) => toSnake(key));
   const placeholders = entries.map((_, index) => `$${index + 1}`);
   const values = entries.map(([, value]) => value);
@@ -103,7 +119,7 @@ async function insert(table, data) {
 }
 
 async function updateById(table, itemId, data) {
-  const entries = Object.entries(data).filter(([, value]) => value !== undefined);
+  const entries = allowedEntries(table, data);
   const assignments = entries.map(([key], index) => `${toSnake(key)} = $${index + 1}`);
   const values = entries.map(([, value]) => value);
   const rows = await query(`update ${table} set ${assignments.join(", ")} where id = $${values.length + 1} returning *`, [...values, itemId]);
@@ -256,8 +272,14 @@ const store = {
   }
 };
 
+function cleanMessageExtra(extra = {}) {
+  return Object.fromEntries(
+    allowedEntries("messages", extra).filter(([key]) => !["id", "sessionId", "role", "content", "createdAt"].includes(key))
+  );
+}
+
 async function addMessage(sessionId, role, content, extra = {}) {
-  const message = { id: randomUUID(), sessionId, role, content, createdAt: now(), ...extra };
+  const message = { id: randomUUID(), sessionId, role, content, createdAt: now(), ...cleanMessageExtra(extra) };
   return store.addMessage(message);
 }
 
@@ -272,7 +294,24 @@ function understand(text) {
   return { intent: "未知问题", confidence: .38, action: "create_ticket", orderNo, source: "知识库未命中", needHandoff: true, handoffReason: "知识库暂无可靠答案", riskLevel: "medium" };
 }
 
+async function prepareDecision(result) {
+  if (result.action !== "show_refund_form" || !result.orderNo) return result;
+  const order = await store.getOrder(result.orderNo);
+  if (!order) return { ...result, action: "order_not_found", source: "订单系统", confidence: Math.max(result.confidence || 0, .9), riskLevel: "medium", needHandoff: false };
+  const existingRefund = await store.getRefundByOrder(order.id);
+  if (!order.refundable || existingRefund) {
+    return { ...result, action: "refund_unavailable", source: "退款系统", confidence: Math.max(result.confidence || 0, .95), riskLevel: "medium", refundId: existingRefund?.id || "", refundStatus: existingRefund?.status || "", needHandoff: false };
+  }
+  return result;
+}
+
 async function businessAnswer(result, aiAnswer = "") {
+  if (result.action === "order_not_found") return `没有查到订单 ${result.orderNo}，请检查订单号是否完整。`;
+  if (result.action === "refund_unavailable") {
+    const order = await store.getOrder(result.orderNo);
+    const detail = order?.refund || (result.refundId ? `已有退款申请 ${result.refundId} 正在处理。` : "如需继续处理，请转人工补充说明。");
+    return order ? `订单 ${order.id} 当前不能重复提交退款申请。当前状态为“${order.status}”。${detail}` : `订单 ${result.orderNo} 当前不能提交退款申请。`;
+  }
   if (result.action === "query_order" || result.action === "query_refund") {
     if (!result.orderNo) return "请提供需要查询的订单号，格式类似 OD20260620001。";
     const order = await store.getOrder(result.orderNo);
@@ -396,9 +435,9 @@ app.post("/api/chat", async (req, res, next) => {
     }
 
     await addMessage(sessionId, "user", text);
-    const result = understand(text);
+    const result = await prepareDecision(understand(text));
     let aiAnswer = "";
-    const shouldAskCoze = result.action === "search_knowledge";
+    const shouldAskCoze = result.action === "search_knowledge" && !result.answer;
     if (shouldAskCoze) {
       try { aiAnswer = await askCoze(session, text); } catch (error) { console.warn("Coze fallback:", error.message); }
     }

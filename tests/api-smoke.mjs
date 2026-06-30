@@ -34,6 +34,7 @@ try {
   });
   if (!policy.body.messages?.some((message) => message.role === "user" && message.content.includes("无理由退货"))) throw new Error("退货规则快捷指令用户消息未保存");
   if (policy.body.decision?.action !== "search_knowledge") throw new Error("退货规则知识问答测试失败");
+  if (policy.body.messages?.some((message) => Object.prototype.hasOwnProperty.call(message, "answer"))) throw new Error("消息入库不应包含数据库不存在的 answer 字段");
 
   const refund = await json("/api/chat", {
     method: "POST",
@@ -60,6 +61,13 @@ try {
     body: JSON.stringify({ sessionId: created.body.session.id, orderNo: "OD20260620001", reason: "商品质量问题" })
   });
   if (duplicateRefund.response.status !== 409) throw new Error("重复退款申请应被拦截");
+
+  const unavailableRefund = await json("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ sessionId: created.body.session.id, message: "OD20260620001 我要退货" })
+  });
+  const latestRefundAssistant = [...(unavailableRefund.body.messages || [])].reverse().find((message) => message.role === "assistant");
+  if (unavailableRefund.body.decision?.action !== "refund_unavailable" || latestRefundAssistant?.action !== "refund_unavailable") throw new Error("已提交退款的订单不应再次展示申请卡");
 
   const handoff = await json("/api/chat", {
     method: "POST",

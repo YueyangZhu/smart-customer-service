@@ -38,6 +38,7 @@ function CustomerPage() {
   const [busyMode, setBusyMode] = useState("booting");
   const [ratingOpen, setRatingOpen] = useState(false);
   const [decision, setDecision] = useState(null);
+  const [dismissedRefundPromptId, setDismissedRefundPromptId] = useState("");
   const listRef = useRef(null);
 
   const isClosed = session?.status === "closed";
@@ -108,6 +109,7 @@ function CustomerPage() {
     setSession(null);
     setMessages([]);
     setInput("");
+    setDismissedRefundPromptId("");
     setDecision({ phase: "new_session", intent: "正在开启新会话", confidence: null, source: "会话系统", action: "创建服务会话", riskLevel: "" });
     try {
       const data = await api.createSession();
@@ -157,6 +159,7 @@ function CustomerPage() {
   const canUseQuick = canType && !humanMode;
   const chatSubtitle = humanMode ? "人工正在跟进 · 新消息会进入同一工单" : "AI 优先响应 · 复杂问题转人工接管";
   const chatProgress = busyMode === "ai" ? progressLabel(decision?.phase) : busyMode === "agent" ? "正在同步给人工客服" : "";
+  const showRefundCard = lastAi?.action === "show_refund_form" && !isClosed && !humanMode && !isBusy && dismissedRefundPromptId !== lastAi.id;
 
   return <main className="customer-layout">
     <section className="intro-panel">
@@ -179,7 +182,7 @@ function CustomerPage() {
         {!busyMode && !messages.length && <ServiceState title="可以开始咨询了" text="输入订单号和问题，系统会判断是直接回复、售后申请还是转人工。" />}
         {messages.map((m) => <Message key={m.id} message={m} />)}
       </div>
-      {lastAi?.action === "show_refund_form" && !isClosed && !humanMode && <RefundCard session={session} orderNo={lastAi.orderNo} onDone={(data) => {
+      {showRefundCard && <RefundCard session={session} orderNo={lastAi.orderNo} onCancel={() => setDismissedRefundPromptId(lastAi.id)} onDone={(data) => {
         const next = data?.session ? data : null;
         if (next) { setSession(next.session); setMessages(next.messages || []); setDecision(decisionFromMessages(next.messages || [])); return; }
         return api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); setDecision(decisionFromMessages(d.messages)); });
@@ -236,7 +239,7 @@ function Decision({ label, value, tone }) {
   return <div className="decision-row"><span>{label}</span><strong className={tone || ""}>{value}</strong></div>;
 }
 
-function RefundCard({ session, orderNo = "", onDone }) {
+function RefundCard({ session, orderNo = "", onDone, onCancel }) {
   const [order, setOrder] = useState(orderNo);
   const [reason, setReason] = useState("商品不合适");
   const [state, setState] = useState("");
@@ -254,9 +257,15 @@ function RefundCard({ session, orderNo = "", onDone }) {
       setSubmitting(false);
     }
   }
-  return <div className="refund-card"><b>售后申请</b><input disabled={submitting} value={order} onChange={(e) => setOrder(e.target.value)} placeholder="订单号" /><select disabled={submitting} value={reason} onChange={(e) => setReason(e.target.value)}><option>商品不合适</option><option>商品质量问题</option><option>错发或漏发</option><option>其他原因</option></select><button disabled={submitting || !order.trim()} onClick={submit}>{submitting ? "提交中" : "提交申请"}</button>{state && <small className={state.startsWith("提交失败") ? "error" : ""}>{state}</small>}</div>;
+  return <div className="refund-card">
+    <div className="refund-card-title"><b>售后申请</b><span>确认订单和原因后提交；不处理可直接关闭。</span></div>
+    <input disabled={submitting} value={order} onChange={(e) => setOrder(e.target.value)} placeholder="订单号" />
+    <select disabled={submitting} value={reason} onChange={(e) => setReason(e.target.value)}><option>商品不合适</option><option>商品质量问题</option><option>错发或漏发</option><option>其他原因</option></select>
+    <button type="button" disabled={submitting || !order.trim()} onClick={submit}>{submitting ? "提交中" : "提交申请"}</button>
+    <button type="button" className="ghost" disabled={submitting} onClick={onCancel}>关闭</button>
+    {state && <small className={state.startsWith("提交失败") ? "error" : ""}>{state}</small>}
+  </div>;
 }
-
 function RatingModal({ session, onClose, onSubmitted }) {
   const [score, setScore] = useState(5), [resolved, setResolved] = useState(true), [comment, setComment] = useState(""), [done, setDone] = useState(false), [submitting, setSubmitting] = useState(false);
   async function submit() {
@@ -307,6 +316,14 @@ function AgentPage() {
     if (!selected || selected.status !== "processing" || !reply.trim()) return;
     await act(async () => { await api.replyTicket(selected.id, reply); setReply(""); });
   }
+  async function closeSelectedTicket() {
+    if (!selected || selected.status !== "processing") return;
+    await api.closeTicket(selected.id);
+    setStatusFilter("closed");
+    setSelectedId(selected.id);
+    setReply("");
+    await refresh();
+  }
 
   return <main className="workspace">
     <aside className="ticket-sidebar">
@@ -324,7 +341,7 @@ function AgentPage() {
       </button>) : <div className="empty-list">当前筛选下没有工单</div>}</div>
     </aside>
     <section className="ticket-detail">{selected ? <>
-      <header><div className="ticket-title-block"><p className="eyebrow">TICKET {selected.id}</p><div className="ticket-title-row"><h2>{selected.intent}</h2></div><p className="ticket-subtitle">最近更新 {formatTime(selected.updatedAt || selected.createdAt)}</p></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={() => act(() => api.closeTicket(selected.id))}>关闭工单</button>}</div></header>
+      <header><div className="ticket-title-block"><p className="eyebrow">TICKET {selected.id}</p><div className="ticket-title-row"><h2>{selected.intent}</h2></div><p className="ticket-subtitle">最近更新 {formatTime(selected.updatedAt || selected.createdAt)}</p></div><div className="ticket-header-actions">{selected.status === "open" && <button className="claim-action" onClick={() => act(() => api.claimTicket(selected.id))}>接入会话</button>}{selected.status === "processing" && <button className="close-action" onClick={closeSelectedTicket}>关闭工单</button>}</div></header>
       <div className="ticket-context compact"><div><small>转人工原因</small><strong>{selected.handoffReason || "需要人工核实"}</strong></div><div><small>优先级</small><strong>{priorityLabel(selected.priority)}</strong></div><div><small>当前状态</small><strong>{statusLabel(selected.status)}</strong></div><div><small>AI 置信度</small><strong>{Math.round((selected.confidence || 0) * 100)}%</strong></div></div>
       <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
@@ -418,6 +435,6 @@ function composerHint({ isClosed, humanMode, busyMode }) {
 }
 function statusLabel(status) { return ({ active: "服务中", waiting_agent: "等待人工", open: "待接入", processing: "处理中", closed: "已关闭" })[status] || "服务中"; }
 function priorityLabel(priority) { return priority === "high" ? "紧急" : "普通"; }
-function actionLabel(action) { return ({ answer: "直接回答", search_knowledge: "检索知识", query_order: "查询订单", query_refund: "查询退款", show_refund_form: "展示售后申请", create_ticket: "创建人工工单", wait_agent: "等待人工处理", new_session: "新建会话" })[action] || action || "--"; }
+function actionLabel(action) { return ({ answer: "直接回答", search_knowledge: "检索知识", query_order: "查询订单", query_refund: "查询退款", show_refund_form: "展示售后申请", refund_unavailable: "提示不可重复申请", order_not_found: "提示订单不存在", submit_refund: "提交售后申请", refund_submitted: "生成申请回执", create_ticket: "创建人工工单", wait_agent: "等待人工处理", new_session: "新建会话" })[action] || action || "--"; }
 function riskLabel(risk) { return ({ low: "低", medium: "中", high: "高" })[risk] || "--"; }
 function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" }) : "--"; }

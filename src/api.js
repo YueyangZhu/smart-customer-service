@@ -19,11 +19,10 @@ export const api = {
     }
 
     onProgress({ phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    onProgress({ phase: "understanding", intent: "正在识别意图", confidence: null, source: "业务规则 + Coze", action: "分析意图与风险", riskLevel: "" });
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    const pending = request("/api/chat", { method: "POST", body: JSON.stringify(payload) });
+    onProgress({ phase: "understanding", intent: "正在识别意图", confidence: null, source: "业务规则", action: "分析意图与风险", riskLevel: "" });
     onProgress({ phase: "generating", intent: "正在生成回复", confidence: null, source: "售后服务 API", action: "组织最终回复", riskLevel: "" });
-    const result = await request("/api/chat", { method: "POST", body: JSON.stringify(payload) });
+    const result = await pending;
     onProgress({ phase: "saving", intent: "回复已生成", confidence: null, source: "业务系统", action: "保存结果", riskLevel: "" });
     return result;
   },
