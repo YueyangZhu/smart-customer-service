@@ -6,7 +6,7 @@ services:
     plan: free
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile
-    startCommand: pnpm start
+    startCommand: node server/reset-quality-data.mjs && pnpm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
