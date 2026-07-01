@@ -88,6 +88,12 @@ function LoginPage({ onLogin }) {
     setError("");
   }
 
+  const featureItems = [
+    ["问", "客户服务入口", "用户只处理咨询、追问、转人工和结束评价，入口更纯粹。"],
+    ["单", "人工工作台", "客服集中查看待接入、处理中和已关闭工单，回复路径清晰。"],
+    ["析", "运营洞察复盘", "运营查看意图分布、知识缺口、闭环状态和报表导出。"]
+  ];
+
   return <main className="login-screen">
     <section className="login-hero">
       <button className="brand login-brand" type="button">
@@ -96,13 +102,14 @@ function LoginPage({ onLogin }) {
       </button>
       <div>
         <p className="eyebrow">AI AFTER-SALES SERVICE</p>
-        <h1>让每一次售后<br />都有清晰分工</h1>
-        <p>用户只进入客户服务，客服与运营进入人工工作台和运营洞察。用一个演示登录流程，把体验、处理和复盘分开。</p>
+        <h1>智能售后服务演示系统</h1>
+        <p className="login-summary">围绕订单、物流、退换货和投诉咨询，把用户自助服务、人工接待处理、运营复盘分析拆成不同角色入口，方便完整演示一条售后服务闭环。</p>
       </div>
       <div className="login-features">
-        <span><i>1</i>用户发起咨询与评价</span>
-        <span><i>2</i>客服接入人工工单</span>
-        <span><i>3</i>运营查看服务洞察</span>
+        {featureItems.map(([icon, title, text]) => <article key={title}>
+          <i>{icon}</i>
+          <span><b>{title}</b><small>{text}</small></span>
+        </article>)}
       </div>
     </section>
     <form className="login-card" onSubmit={submit}>
@@ -116,7 +123,7 @@ function LoginPage({ onLogin }) {
       <button className="primary login-submit" type="submit">登录</button>
       <div className="demo-title"><span />演示账号（点击填充）<span /></div>
       <div className="demo-users">
-        {DEMO_USERS.map((user) => <button type="button" key={user.id} onClick={() => fillUser(user)}>
+        {DEMO_USERS.map((user) => <button className={`demo-user ${user.id}`} type="button" key={user.id} onClick={() => fillUser(user)}>
           <i>{user.name.slice(0, 1)}</i>
           <span><b>{user.roleName}</b><small>{user.account} / {user.department}</small></span>
           <em>密码 123456</em>
