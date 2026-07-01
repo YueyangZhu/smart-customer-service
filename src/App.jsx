@@ -9,25 +9,151 @@ const QUICK_PROMPTS = [
   ["转人工", "退款金额不对，我要投诉并转人工处理"]
 ];
 
+const DEMO_USERS = [
+  { id: "customer", name: "李明", role: "customer", roleName: "售后用户", account: "customer@demo.com", password: "123456", department: "消费者端", defaultPage: "customer" },
+  { id: "agent", name: "周妍", role: "staff", roleName: "客服专员", account: "agent@demo.com", password: "123456", department: "客户服务部", defaultPage: "agent" },
+  { id: "ops", name: "陈晨", role: "staff", roleName: "运营主管", account: "ops@demo.com", password: "123456", department: "服务运营部", defaultPage: "analytics" }
+];
+
+const USER_STORAGE_KEY = "yanxi_demo_user";
+const PAGE_STORAGE_KEY = "yanxi_demo_page";
+
 export default function App() {
-  const [page, setPage] = useState("customer");
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem(USER_STORAGE_KEY);
+    return DEMO_USERS.find((user) => user.id === saved) || null;
+  });
+  const allowedPages = useMemo(() => currentUser?.role === "staff" ? ["agent", "analytics"] : ["customer"], [currentUser]);
+  const [page, setPage] = useState(() => {
+    const savedUser = DEMO_USERS.find((user) => user.id === localStorage.getItem(USER_STORAGE_KEY));
+    if (!savedUser) return "customer";
+    const savedPage = localStorage.getItem(PAGE_STORAGE_KEY);
+    const pages = savedUser.role === "staff" ? ["agent", "analytics"] : ["customer"];
+    return pages.includes(savedPage) ? savedPage : savedUser.defaultPage;
+  });
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (!allowedPages.includes(page)) setPage(currentUser.defaultPage);
+  }, [allowedPages, currentUser, page]);
+
+  function login(user) {
+    setCurrentUser(user);
+    setPage(user.defaultPage);
+    localStorage.setItem(USER_STORAGE_KEY, user.id);
+    localStorage.setItem(PAGE_STORAGE_KEY, user.defaultPage);
+  }
+
+  function changePage(nextPage) {
+    if (!allowedPages.includes(nextPage)) return;
+    setPage(nextPage);
+    localStorage.setItem(PAGE_STORAGE_KEY, nextPage);
+  }
+
+  function logout() {
+    setCurrentUser(null);
+    setPage("customer");
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(PAGE_STORAGE_KEY);
+  }
+
+  if (!currentUser) return <LoginPage onLogin={login} />;
+
   return <div className="app-shell">
-    <Header page={page} setPage={setPage} />
+    <Header page={page} setPage={changePage} currentUser={currentUser} allowedPages={allowedPages} onSwitchUser={login} onLogout={logout} />
     <div style={{ display: page === "customer" ? "contents" : "none" }}><CustomerPage /></div>
     <div style={{ display: page === "agent" ? "contents" : "none" }}><AgentPage /></div>
     <div style={{ display: page === "analytics" ? "contents" : "none" }}><AnalyticsPage /></div>
   </div>;
 }
 
-function Header({ page, setPage }) {
-  const links = [["customer", "客户服务"], ["agent", "人工工作台"], ["analytics", "运营洞察"]];
+function LoginPage({ onLogin }) {
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    const user = DEMO_USERS.find((item) => item.account === account.trim() && item.password === password);
+    if (!user) {
+      setError("账号或密码不正确，请使用右侧演示账号登录。");
+      return;
+    }
+    onLogin(user);
+  }
+
+  function fillUser(user) {
+    setAccount(user.account);
+    setPassword(user.password);
+    setError("");
+  }
+
+  return <main className="login-screen">
+    <section className="login-hero">
+      <button className="brand login-brand" type="button">
+        <span className="brand-mark">言</span>
+        <span><strong>言析智能客服</strong><small>AFTER-SALES COPILOT</small></span>
+      </button>
+      <div>
+        <p className="eyebrow">AI AFTER-SALES SERVICE</p>
+        <h1>让每一次售后<br />都有清晰分工</h1>
+        <p>用户只进入客户服务，客服与运营进入人工工作台和运营洞察。用一个演示登录流程，把体验、处理和复盘分开。</p>
+      </div>
+      <div className="login-features">
+        <span><i>1</i>用户发起咨询与评价</span>
+        <span><i>2</i>客服接入人工工单</span>
+        <span><i>3</i>运营查看服务洞察</span>
+      </div>
+    </section>
+    <form className="login-card" onSubmit={submit}>
+      <div>
+        <h2>欢迎登录</h2>
+        <p>请选择演示账号，查看不同角色对应的系统入口。</p>
+      </div>
+      <label>账号<input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="请输入邮箱账号" /></label>
+      <label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" /></label>
+      {error && <div className="login-error">{error}</div>}
+      <button className="primary login-submit" type="submit">登录</button>
+      <div className="demo-title"><span />演示账号（点击填充）<span /></div>
+      <div className="demo-users">
+        {DEMO_USERS.map((user) => <button type="button" key={user.id} onClick={() => fillUser(user)}>
+          <i>{user.name.slice(0, 1)}</i>
+          <span><b>{user.roleName}</b><small>{user.account} / {user.department}</small></span>
+          <em>密码 123456</em>
+        </button>)}
+      </div>
+      <p className="login-note">本系统为智能客服演示环境，账号仅用于区分可见页面，不代表真实鉴权。</p>
+    </form>
+  </main>;
+}
+
+function Header({ page, setPage, currentUser, allowedPages, onSwitchUser, onLogout }) {
+  const links = [["customer", "客户服务"], ["agent", "人工工作台"], ["analytics", "运营洞察"]].filter(([key]) => allowedPages.includes(key));
+  const [menuOpen, setMenuOpen] = useState(false);
   return <header className="topbar">
-    <button className="brand" onClick={() => setPage("customer")}>
+    <button className="brand" onClick={() => setPage(currentUser.defaultPage)}>
       <span className="brand-mark">言</span>
       <span><strong>言析智能客服</strong><small>AFTER-SALES COPILOT</small></span>
     </button>
     <nav>{links.map(([key, label]) => <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)}>{label}</button>)}</nav>
-    <div className="online"><i /> 服务运行中</div>
+    <div className="header-right">
+      <div className="online"><i /> 服务运行中</div>
+      <div className="user-menu">
+        <button className="user-trigger" type="button" onClick={() => setMenuOpen((open) => !open)}>
+          <i>{currentUser.name.slice(0, 1)}</i>
+          <span><b>{currentUser.name}</b><small>{currentUser.roleName}</small></span>
+          <em>v</em>
+        </button>
+        {menuOpen && <div className="user-dropdown">
+          <small>切换演示角色</small>
+          {DEMO_USERS.map((user) => <button type="button" key={user.id} onClick={() => { onSwitchUser(user); setMenuOpen(false); }}>
+            <span>{user.roleName}</span>{currentUser.id === user.id && <i>当前</i>}
+          </button>)}
+          <hr />
+          <button type="button" onClick={onLogout}>退出登录</button>
+        </div>}
+      </div>
+    </div>
   </header>;
 }
 
