@@ -1270,3 +1270,188 @@ button:disabled { cursor: not-allowed; opacity: .5; }
     min-width: 0;
   }
 }
+
+
+/* v2.2 service desk composer and analytics density */
+.agent-composer.inline.composer {
+  margin: 12px 0 0;
+  padding: 8px 8px 25px;
+  display: flex;
+  grid-template-columns: none;
+  align-items: flex-end;
+  gap: 8px;
+  border: 1px solid #cfdad5;
+  border-radius: 17px;
+  background: #f8faf9;
+}
+.agent-composer.inline.composer textarea {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 54px;
+  max-height: 128px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  outline: 0;
+  resize: none;
+  line-height: 1.5;
+  box-shadow: none;
+}
+.agent-composer.inline.composer textarea:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+.agent-composer.inline.composer button,
+.agent-composer.inline.composer.locked button {
+  align-self: flex-end;
+  width: auto;
+  min-width: 68px;
+  height: auto;
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--green);
+  color: #fff;
+  font-weight: 800;
+}
+.agent-composer.inline.composer.locked {
+  background: #eef3f0;
+}
+.agent-composer.inline.composer.locked button {
+  background: #c6d4ce;
+}
+.analytics {
+  padding-top: 18px;
+}
+.analytics-heading.compact {
+  padding: 12px 16px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.analytics-heading.compact .page-title {
+  gap: 2px;
+}
+.analytics-heading.compact .page-title h1 {
+  font-size: clamp(24px, 2.2vw, 32px);
+}
+.analytics-heading.compact .page-title > p:last-child {
+  font-size: 12px;
+}
+.analytics-heading.compact .report-tools {
+  align-items: center;
+}
+.analytics .date-range {
+  align-items: center;
+}
+.analytics .date-range label {
+  gap: 4px;
+  color: #71817b;
+  font-size: 11px;
+}
+.analytics .date-range input {
+  width: 132px;
+  height: 34px;
+}
+.analytics .date-range > span {
+  padding-bottom: 0;
+}
+.date-reset {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--green);
+  font-weight: 800;
+  padding: 0 12px;
+}
+.metric-grid {
+  margin: 12px 0;
+}
+.metric-grid article.metric-card {
+  min-height: 82px;
+  padding: 14px 16px;
+}
+.metric-card > span,
+.closure-bars span,
+.info-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.info-tip {
+  position: relative;
+  width: 17px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #cad8d2;
+  border-radius: 999px;
+  background: #fff;
+  color: #6b7a74;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: help;
+}
+.info-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  width: 260px;
+  max-width: 70vw;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #14212b;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  text-align: left;
+  white-space: normal;
+  transform: translate(-50%, 4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.info-tip:hover::after,
+.info-tip:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.analytics-grid {
+  align-items: stretch;
+}
+.analytics-grid article.intent-card,
+.analytics-grid article.knowledge-card {
+  min-height: 332px;
+  height: 100%;
+}
+.analytics-grid article.knowledge-card {
+  background: linear-gradient(135deg, #fff 0%, #fbfdfc 58%, #f5faf7 100%);
+}
+.knowledge-card .gap-list.compact-list {
+  display: grid;
+  gap: 10px;
+}
+.knowledge-card .gap-list div {
+  min-height: 42px;
+}
+.analytics-grid article.wide {
+  min-height: 220px;
+}
+@media (max-width: 900px) {
+  .analytics-grid article.intent-card,
+  .analytics-grid article.knowledge-card { min-height: 0; }
+}
+@media (max-width: 760px) {
+  .agent-composer.inline.composer { flex-direction: column; align-items: stretch; }
+  .agent-composer.inline.composer button,
+  .agent-composer.inline.composer.locked button { width: 100%; }
+  .analytics .date-range { width: 100%; align-items: stretch; }
+  .analytics .date-range input { width: 100%; }
+  .date-reset { width: 100%; }
+}

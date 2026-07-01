@@ -113,9 +113,9 @@ function priorityText(value) {
 }
 
 function reportRange(range = {}) {
-  return `${range.from || "全部"} 至 ${range.to || "全部"}`;
+  if (!range.from && !range.to) return "\u5168\u90e8\u6570\u636e";
+  return (range.from || "\u6700\u65e9") + " \u81f3 " + (range.to || "\u5168\u90e8");
 }
-
 function recommendations(data, raw = {}) {
   const metrics = data.metrics || {};
   const items = [];
@@ -272,6 +272,12 @@ function drawMetricCard(pdf, item, x, y, width, height) {
   if (item.note) drawTextBlock(pdf, item.note, x + 6, y + 28, width - 12, { fontSize: 7.2, lineHeight: 3.5 });
 }
 
+function drawMetricNotes(pdf, x, y, width) {
+  setText(pdf, PDF.muted);
+  pdf.setFontSize(7.4);
+  const text = "\u6307\u6807\u53e3\u5f84\uff1aAI \u81ea\u52a9\u89e3\u51b3\u7387=AI \u81ea\u52a9\u95ed\u73af\u4f1a\u8bdd/\u7edf\u8ba1\u4f1a\u8bdd\uff1b\u8f6c\u4eba\u5de5\u7387=\u4eba\u5de5\u5de5\u5355\u6570/\u7edf\u8ba1\u4f1a\u8bdd\uff1b\u6ee1\u610f\u5ea6=\u7528\u6237\u8bc4\u5206\u5747\u503c\uff0c\u6ee1\u5206 5 \u5206\uff1b\u95ed\u73af\u72b6\u6001\u4e2d\uff0cAI \u81ea\u52a9\u89e3\u51b3\u8868\u793a\u672a\u8fdb\u5165\u4eba\u5de5\uff0c\u4eba\u5de5\u5df2\u89e3\u51b3\u8868\u793a\u5ba2\u670d\u5173\u95ed\u5de5\u5355\uff0c\u5904\u7406\u4e2d\u8868\u793a\u4ecd\u672a\u95ed\u73af\u3002";
+  drawTextBlock(pdf, text, x, y, width, { fontSize: 7.4, lineHeight: 3.6, maxLines: 2 });
+}
 function drawBar(pdf, x, y, width, value, max, color, height = 3.8) {
   setFill(pdf, [234, 240, 237]);
   pdf.roundedRect(x, y, width, height, height / 2, height / 2, "F");
@@ -506,8 +512,9 @@ export async function exportPdf(data, range, raw = {}, options = {}) {
     drawMetricCard(pdf, item, x, y, 89, 32);
   });
 
-  drawIntentCard(pdf, data, 12, 134, 186, 72);
-  drawKnowledgeCard(pdf, data, 12, 210, 186, 68);
+  drawMetricNotes(pdf, 12, 132, 186);
+  drawIntentCard(pdf, data, 12, 146, 186, 66);
+  drawKnowledgeCard(pdf, data, 12, 216, 186, 62);
 
   pdf.addPage();
   const page2StartY = drawSubHeader(

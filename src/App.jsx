@@ -550,7 +550,7 @@ function AgentPage() {
       <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
       <div className="timeline" ref={timelineRef}>{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
-      <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><div className="agent-input-wrap"><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复"} /><small>Enter 发送 / Shift+Enter 换行</small></div><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送</button></div>
+      <form className={"composer agent-composer inline " + (selected.status !== "processing" ? "locked" : "")} onSubmit={(e) => { e.preventDefault(); sendReply(); }}><textarea rows="2" disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "\u5148\u63a5\u5165\u4f1a\u8bdd\u540e\u56de\u590d" : selected.status === "closed" ? "\u5de5\u5355\u5df2\u5173\u95ed" : "\u8f93\u5165\u4eba\u5de5\u56de\u590d"} /><small className="keyboard-hint">Enter {"\u53d1\u9001"} / Shift+Enter {"\u6362\u884c"}</small><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} type="submit">{"\u53d1\u9001"}</button></form>
     </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
     {confirmClose && <div className="modal-backdrop"><div className="modal confirm-modal">
       <p className="eyebrow">CLOSE TICKET</p>
@@ -563,8 +563,8 @@ function AgentPage() {
 
 function AnalyticsPage() {
   const [data, setData] = useState(null);
-  const [from, setFrom] = useState(() => beijingDate(-29));
-  const [to, setTo] = useState(() => beijingDate());
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [exporting, setExporting] = useState("");
   const fromInputRef = useRef(null), toInputRef = useRef(null);
   useEffect(() => {
@@ -576,39 +576,52 @@ function AnalyticsPage() {
   async function downloadExcel() {
     if (exporting) return;
     try { setExporting("excel"); const [{ exportExcel }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportExcel(raw, data || {}); }
-    catch (error) { window.alert(error.message || "Excel 导出失败"); } finally { setExporting(""); }
+    catch (error) { window.alert(error.message || "Excel \u5bfc\u51fa\u5931\u8d25"); } finally { setExporting(""); }
   }
   async function downloadPdf() {
     if (exporting) return;
     try { setExporting("pdf"); const [{ exportPdf }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportPdf(data || {}, { from, to }, raw); }
-    catch (error) { window.alert(error.message || "PDF 生成失败"); } finally { setExporting(""); }
+    catch (error) { window.alert(error.message || "PDF \u751f\u6210\u5931\u8d25"); } finally { setExporting(""); }
   }
   const metrics = data?.metrics || {};
-  const cards = [["区间会话", metrics.sessions, "次"], ["AI 自助解决率", metrics.solveRate, "%"], ["转人工率", metrics.handoffRate, "%"], ["满意度", metrics.satisfaction, "/5"]];
-  const closure = data?.closure || [{ name: "AI 自助解决", count: metrics.aiResolved || 0 }, { name: "人工已解决", count: metrics.humanResolved || 0 }, { name: "处理中", count: metrics.inProgress || 0 }];
+  const metricTips = {
+    "\u533a\u95f4\u4f1a\u8bdd": "\u5f53\u524d\u7b5b\u9009\u8303\u56f4\u5185\u8fdb\u5165\u7edf\u8ba1\u7684\u670d\u52a1\u4f1a\u8bdd\u6570\u91cf\uff1b\u9ed8\u8ba4\u672a\u7b5b\u65e5\u671f\u65f6\u7edf\u8ba1\u5168\u90e8\u6570\u636e\u3002",
+    "AI \u81ea\u52a9\u89e3\u51b3\u7387": "\u7531 AI \u56de\u590d\u540e\u7528\u6237\u8bc4\u4ef7\u4e3a\u5df2\u89e3\u51b3\u3001\u4e14\u6ca1\u6709\u8fdb\u5165\u4eba\u5de5\u5de5\u5355\u7684\u4f1a\u8bdd\u5360\u6bd4\u3002",
+    "\u8f6c\u4eba\u5de5\u7387": "\u521b\u5efa\u8fc7\u4eba\u5de5\u5de5\u5355\u7684\u4f1a\u8bdd\u5360\u6bd4\uff0c\u7528\u6765\u89c2\u5bdf AI \u9700\u8981\u4eba\u5de5\u515c\u5e95\u7684\u6bd4\u4f8b\u3002",
+    "\u6ee1\u610f\u5ea6": "\u7528\u6237\u7ed3\u675f\u8bc4\u4ef7\u7684\u5e73\u5747\u5206\uff0c\u6ee1\u5206 5 \u5206\uff1b\u6ca1\u6709\u8bc4\u4ef7\u65f6\u663e\u793a\u4e3a\u7a7a\u3002"
+  };
+  const cards = [["\u533a\u95f4\u4f1a\u8bdd", metrics.sessions, "\u6b21"], ["AI \u81ea\u52a9\u89e3\u51b3\u7387", metrics.solveRate, "%"], ["\u8f6c\u4eba\u5de5\u7387", metrics.handoffRate, "%"], ["\u6ee1\u610f\u5ea6", metrics.satisfaction, "/5"]];
+  const closureTips = {
+    "AI \u81ea\u52a9\u89e3\u51b3": "\u4f1a\u8bdd\u6700\u7ec8\u7531 AI \u81ea\u52a9\u95ed\u73af\uff0c\u6ca1\u6709\u8fdb\u5165\u4eba\u5de5\u5904\u7406\u3002",
+    "\u4eba\u5de5\u5df2\u89e3\u51b3": "\u4f1a\u8bdd\u8fdb\u5165\u4eba\u5de5\u5de5\u5355\uff0c\u5e76\u7531\u5ba2\u670d\u5904\u7406\u540e\u5173\u95ed\u3002",
+    "\u5904\u7406\u4e2d": "\u4f1a\u8bdd\u6216\u5de5\u5355\u4ecd\u5728\u670d\u52a1\u4e2d\uff0c\u5c1a\u672a\u5f62\u6210\u6700\u7ec8\u95ed\u73af\u3002"
+  };
+  const closure = data?.closure || [{ name: "AI \u81ea\u52a9\u89e3\u51b3", count: metrics.aiResolved || 0 }, { name: "\u4eba\u5de5\u5df2\u89e3\u51b3", count: metrics.humanResolved || 0 }, { name: "\u5904\u7406\u4e2d", count: metrics.inProgress || 0 }];
   const closureTotal = Math.max(closure.reduce((sum, item) => sum + item.count, 0), 1);
   const closureMax = Math.max(...closure.map((item) => item.count), 1);
   let angle = 0;
   const colors = ["#0b7a61", "#86b8a7", "#f0a45d", "#d8dedb"];
-  const donut = `conic-gradient(${closure.map((item, index) => { const start = angle; angle += item.count / closureTotal * 360; return `${colors[index % colors.length]} ${start}deg ${angle}deg`; }).join(",")})`;
+  const donut = "conic-gradient(" + closure.map((item, index) => { const start = angle; angle += item.count / closureTotal * 360; return colors[index % colors.length] + " " + start + "deg " + angle + "deg"; }).join(",") + ")";
   const topIntents = (data?.intents || []).slice(0, 5);
   const topKnowledgeGaps = (data?.knowledgeGaps || []).slice(0, 5);
   const intentTotal = Math.max(topIntents.reduce((sum, item) => sum + Number(item.count || 0), 0), 1);
   const intentColors = ["#0b7a61", "#1f8f72", "#86b8a7", "#f0a45d", "#d8dedb"];
   let intentAngle = 0;
-  const intentDonut = topIntents.length ? `conic-gradient(${topIntents.map((item, index) => { const start = intentAngle; intentAngle += Number(item.count || 0) / intentTotal * 360; return `${intentColors[index % intentColors.length]} ${start}deg ${intentAngle}deg`; }).join(",")})` : "conic-gradient(#d8dedb 0deg 360deg)";
+  const intentDonut = topIntents.length ? "conic-gradient(" + topIntents.map((item, index) => { const start = intentAngle; intentAngle += Number(item.count || 0) / intentTotal * 360; return intentColors[index % intentColors.length] + " " + start + "deg " + intentAngle + "deg"; }).join(",") + ")" : "conic-gradient(#d8dedb 0deg 360deg)";
   const leadingIntent = topIntents[0];
-  return <main className="analytics"><div className="analytics-heading"><div className="page-title"><p className="eyebrow">SERVICE INTELLIGENCE</p><h1>运营洞察</h1><p>从每一次服务中，找到下一次优化的方向。</p></div>
-    <div className="report-tools"><div className="date-range"><label onClick={() => fromInputRef.current?.showPicker?.()}>开始日期<input ref={fromInputRef} type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label><span>至</span><label onClick={() => toInputRef.current?.showPicker?.()}>结束日期<input ref={toInputRef} type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label></div><div className="export-actions"><button className={exporting === "excel" ? "is-loading" : ""} aria-busy={exporting === "excel"} disabled={!data || exporting === "excel"} onClick={downloadExcel}><span>导出 Excel</span>{exporting === "excel" && <i />}</button><button className={`primary ${exporting === "pdf" ? "is-loading" : ""}`} aria-busy={exporting === "pdf"} disabled={!data || exporting === "pdf"} onClick={downloadPdf}><span>生成 PDF 报告</span>{exporting === "pdf" && <i />}</button></div></div></div>
-    <section className="metric-grid">{cards.map(([label, value, unit]) => <article key={label}><span>{label}</span><strong>{value ?? "--"}<small>{unit}</small></strong></article>)}</section>
-    <section className="analytics-grid"><article className="intent-card"><InfoTitle title="意图分布 Top 5" tip="按 AI 最终识别的售后意图统计。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="intent-layout"><div className="intent-ring-wrap"><div className="intent-ring" style={{ background: intentDonut }}><span><b>{leadingIntent ? Math.round(Number(leadingIntent.count || 0) / intentTotal * 100) : 0}%</b><small>{leadingIntent?.name || "暂无意图"}</small></span></div><em>主意图占比</em></div><div className="intent-list">{topIntents.map((x, index) => <div className="intent-item" key={x.name}><i style={{ background: intentColors[index % intentColors.length] }}>{index + 1}</i><span>{x.name}<small>{Math.round(Number(x.count || 0) / intentTotal * 100)}%</small></span><div><b style={{ width: `${Math.round(Number(x.count || 0) / intentTotal * 100)}%`, background: intentColors[index % intentColors.length] }} /></div><strong>{x.count}</strong></div>)}</div></div></article>
-      <article><InfoTitle title="知识缺口 Top 5" tip="AI 无法从现有知识库获得可靠答案、需要人工补充的问题。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="gap-list compact-list">{topKnowledgeGaps.map((x) => <div key={x.question}><span>{x.question}</span><b>{x.count} 次</b></div>)}</div></article>
-      <article className="wide"><InfoTitle title="闭环状态" tip="展示会话最终流向：AI 自助解决、人工已解决或仍在处理中；用于判断服务链路是否真正完成。" /><div className="closure-layout"><div className="closure-bars">{closure.map((item, index) => <div key={item.name}><span><i style={{ background: colors[index % colors.length] }} />{item.name}</span><div><b style={{ width: `${Math.round(item.count / closureMax * 100)}%`, background: colors[index % colors.length] }} /></div><strong>{item.count}</strong></div>)}</div><div className="closure-donut-wrap"><div className="closure-donut" style={{ background: donut }}><span><b>{closureTotal}</b>会话</span></div><div className="closure-legend">{closure.map((item, index) => <span key={item.name}><i style={{ background: colors[index % colors.length] }} />{item.name} {Math.round(item.count / closureTotal * 100)}%</span>)}</div></div></div></article>
+  const rangeText = from || to ? (from || "\u6700\u65e9") + " \u81f3 " + (to || "\u4eca\u5929") : "\u5168\u90e8\u6570\u636e";
+  return <main className="analytics"><div className="analytics-heading compact"><div className="page-title"><p className="eyebrow">SERVICE INTELLIGENCE</p><h1>{"\u8fd0\u8425\u6d1e\u5bdf"}</h1><p>{"\u5f53\u524d\u7edf\u8ba1\uff1a"}{rangeText}</p></div>
+    <div className="report-tools"><div className="date-range"><label onClick={() => fromInputRef.current?.showPicker?.()}>{"\u5f00\u59cb\u65e5\u671f"}<input ref={fromInputRef} type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} /></label><span>{"\u81f3"}</span><label onClick={() => toInputRef.current?.showPicker?.()}>{"\u7ed3\u675f\u65e5\u671f"}<input ref={toInputRef} type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></label><button type="button" className="date-reset" onClick={() => { setFrom(""); setTo(""); }}>{"\u5168\u90e8"}</button></div><div className="export-actions"><button className={exporting === "excel" ? "is-loading" : ""} aria-busy={exporting === "excel"} disabled={!data || exporting === "excel"} onClick={downloadExcel}><span>{"\u5bfc\u51fa Excel"}</span>{exporting === "excel" && <i />}</button><button className={"primary " + (exporting === "pdf" ? "is-loading" : "")} aria-busy={exporting === "pdf"} disabled={!data || exporting === "pdf"} onClick={downloadPdf}><span>{"\u751f\u6210 PDF \u62a5\u544a"}</span>{exporting === "pdf" && <i />}</button></div></div></div>
+    <section className="metric-grid">{cards.map(([label, value, unit]) => <article className="metric-card" key={label}><span>{label}<InfoTip label={label} tip={metricTips[label]} /></span><strong>{value ?? "--"}<small>{unit}</small></strong></article>)}</section>
+    <section className="analytics-grid"><article className="intent-card"><InfoTitle title="\u610f\u56fe\u5206\u5e03 Top 5" tip="\u6309 AI \u6700\u7ec8\u8bc6\u522b\u7684\u552e\u540e\u610f\u56fe\u7edf\u8ba1\u3002\u9875\u9762\u5c55\u793a\u524d 5 \u9879\uff0c\u5b8c\u6574\u660e\u7ec6\u4fdd\u7559\u5728\u5bfc\u51fa\u6570\u636e\u4e2d\u3002" /><div className="intent-layout"><div className="intent-ring-wrap"><div className="intent-ring" style={{ background: intentDonut }}><span><b>{leadingIntent ? Math.round(Number(leadingIntent.count || 0) / intentTotal * 100) : 0}%</b><small>{leadingIntent?.name || "\u6682\u65e0\u610f\u56fe"}</small></span></div><em>{"\u4e3b\u610f\u56fe\u5360\u6bd4"}</em></div><div className="intent-list">{topIntents.map((x, index) => { const pct = Math.round(Number(x.count || 0) / intentTotal * 100); return <div className="intent-item" key={x.name}><i style={{ background: intentColors[index % intentColors.length] }}>{index + 1}</i><span>{x.name}<small>{pct}%</small></span><div><b style={{ width: pct + "%", background: intentColors[index % intentColors.length] }} /></div><strong>{x.count}</strong></div>; })}</div></div></article>
+      <article className="knowledge-card"><InfoTitle title="\u77e5\u8bc6\u7f3a\u53e3 Top 5" tip="AI \u65e0\u6cd5\u4ece\u73b0\u6709\u77e5\u8bc6\u5e93\u83b7\u5f97\u53ef\u9760\u7b54\u6848\u3001\u9700\u8981\u4eba\u5de5\u8865\u5145\u7684\u95ee\u9898\u3002\u9875\u9762\u5c55\u793a\u524d 5 \u9879\uff0c\u5b8c\u6574\u660e\u7ec6\u4fdd\u7559\u5728\u5bfc\u51fa\u6570\u636e\u4e2d\u3002" /><div className="gap-list compact-list">{topKnowledgeGaps.map((x) => <div key={x.question}><span>{x.question}</span><b>{x.count} {"\u6b21"}</b></div>)}</div></article>
+      <article className="wide"><InfoTitle title="\u95ed\u73af\u72b6\u6001" tip="\u5c55\u793a\u4f1a\u8bdd\u6700\u7ec8\u6d41\u5411\uff1aAI \u81ea\u52a9\u89e3\u51b3\u3001\u4eba\u5de5\u5df2\u89e3\u51b3\u6216\u4ecd\u5728\u5904\u7406\u4e2d\uff1b\u7528\u4e8e\u5224\u65ad\u670d\u52a1\u94fe\u8def\u662f\u5426\u771f\u6b63\u5b8c\u6210\u3002" /><div className="closure-layout"><div className="closure-bars">{closure.map((item, index) => <div key={item.name}><span><i style={{ background: colors[index % colors.length] }} />{item.name}<InfoTip label={item.name} tip={closureTips[item.name]} /></span><div><b style={{ width: Math.round(item.count / closureMax * 100) + "%", background: colors[index % colors.length] }} /></div><strong>{item.count}</strong></div>)}</div><div className="closure-donut-wrap"><div className="closure-donut" style={{ background: donut }}><span><b>{closureTotal}</b>{"\u4f1a\u8bdd"}</span></div><div className="closure-legend">{closure.map((item, index) => <span key={item.name}><i style={{ background: colors[index % colors.length] }} />{item.name} {Math.round(item.count / closureTotal * 100)}%</span>)}</div></div></div></article>
     </section>
   </main>;
 }
 
-function InfoTitle({ title, tip }) { return <h2 className="info-title">{title}<button type="button" className="info-tip" aria-label={`${title}说明`} data-tip={tip}>?</button></h2>; }
+function InfoTitle({ title, tip }) { return <h2 className="info-title">{title}<InfoTip label={title} tip={tip} /></h2>; }
+function InfoTip({ label, tip }) { return <button type="button" className="info-tip" aria-label={label + "\u8bf4\u660e"} data-tip={tip}>?</button>; }
 function beijingDate(offsetDays = 0) {
   const date = new Date(Date.now() + offsetDays * 86400000);
   const parts = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
