@@ -1455,3 +1455,116 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .analytics .date-range input { width: 100%; }
   .date-reset { width: 100%; }
 }
+
+/* v2.3 analytics cleanup and desk composer alignment */
+.agent-composer.inline.composer {
+  margin: 8px 18px 14px;
+  padding: 8px 8px 25px;
+  border: 1px solid #cfdad5;
+  border-radius: 17px;
+  background: #f8faf9;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border-top: 1px solid #cfdad5;
+}
+.agent-composer.inline.composer textarea {
+  min-height: 54px;
+  max-height: 132px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  resize: none;
+  line-height: 1.5;
+}
+.agent-composer.inline.composer textarea:focus {
+  box-shadow: none;
+}
+.agent-composer.inline.composer button,
+.agent-composer.inline.composer.locked button {
+  align-self: flex-end;
+  min-width: 68px;
+  width: auto;
+  min-height: 44px;
+  height: 44px;
+  padding: 11px 18px;
+  border-radius: 12px;
+}
+.analytics {
+  padding-top: 14px;
+}
+.analytics-heading.compact {
+  padding: 10px 14px;
+  min-height: 74px;
+  align-items: center;
+}
+.analytics-heading.compact .page-title h1 {
+  font-size: clamp(24px, 2vw, 30px);
+  line-height: 1.05;
+}
+.analytics-heading.compact .page-title > p:last-child {
+  display: none;
+}
+.analytics .date-range.compact label {
+  display: block;
+  font-size: 0;
+  line-height: 0;
+}
+.analytics .date-range.compact input {
+  width: 132px;
+  height: 34px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.date-reset {
+  display: none;
+}
+.metric-grid {
+  margin: 10px 0;
+}
+.metric-grid article.metric-card {
+  min-height: 78px;
+}
+.analytics-grid article.intent-card,
+.analytics-grid article.knowledge-card {
+  min-height: 318px;
+  max-height: 318px;
+  overflow: hidden;
+}
+.knowledge-card .gap-list.compact-list.scroll-list {
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #8fb2a6 #eef4f1;
+}
+.knowledge-card .gap-list.compact-list.scroll-list::-webkit-scrollbar {
+  width: 7px;
+}
+.knowledge-card .gap-list.compact-list.scroll-list::-webkit-scrollbar-track {
+  background: #eef4f1;
+  border-radius: 999px;
+}
+.knowledge-card .gap-list.compact-list.scroll-list::-webkit-scrollbar-thumb {
+  background: #8fb2a6;
+  border-radius: 999px;
+}
+.closure-bars span .info-tip {
+  display: none;
+}
+.info-title .info-tip::after {
+  width: 320px;
+}
+@media (max-width: 760px) {
+  .agent-composer.inline.composer button,
+  .agent-composer.inline.composer.locked button {
+    width: 100%;
+  }
+  .analytics .date-range.compact input {
+    width: 100%;
+  }
+  .analytics-grid article.intent-card,
+  .analytics-grid article.knowledge-card {
+    max-height: none;
+  }
+}

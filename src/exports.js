@@ -275,7 +275,7 @@ function drawMetricCard(pdf, item, x, y, width, height) {
 function drawMetricNotes(pdf, x, y, width) {
   setText(pdf, PDF.muted);
   pdf.setFontSize(7.4);
-  const text = "\u6307\u6807\u53e3\u5f84\uff1aAI \u81ea\u52a9\u89e3\u51b3\u7387=AI \u81ea\u52a9\u95ed\u73af\u4f1a\u8bdd/\u7edf\u8ba1\u4f1a\u8bdd\uff1b\u8f6c\u4eba\u5de5\u7387=\u4eba\u5de5\u5de5\u5355\u6570/\u7edf\u8ba1\u4f1a\u8bdd\uff1b\u6ee1\u610f\u5ea6=\u7528\u6237\u8bc4\u5206\u5747\u503c\uff0c\u6ee1\u5206 5 \u5206\uff1b\u95ed\u73af\u72b6\u6001\u4e2d\uff0cAI \u81ea\u52a9\u89e3\u51b3\u8868\u793a\u672a\u8fdb\u5165\u4eba\u5de5\uff0c\u4eba\u5de5\u5df2\u89e3\u51b3\u8868\u793a\u5ba2\u670d\u5173\u95ed\u5de5\u5355\uff0c\u5904\u7406\u4e2d\u8868\u793a\u4ecd\u672a\u95ed\u73af\u3002";
+  const text = "指标口径：区间会话为当前日期范围内进入统计的会话数；AI 自助解决率为未进入人工且用户评价已解决的会话占比；转人工率为人工工单占比；满意度为用户评分均值，满分 5 分。";
   drawTextBlock(pdf, text, x, y, width, { fontSize: 7.4, lineHeight: 3.6, maxLines: 2 });
 }
 function drawBar(pdf, x, y, width, value, max, color, height = 3.8) {
@@ -355,7 +355,7 @@ function drawIntentCard(pdf, data, x, y, width, height) {
 function drawKnowledgeCard(pdf, data, x, y, width, height) {
   drawCard(pdf, x, y, width, height);
   const gaps = (data.knowledgeGaps || []).slice(0, 5);
-  drawSectionTitle(pdf, "知识缺口 Top 5", "需要补充知识库或规则的高频问题，完整明细仍保留在 Excel。", x + 7, y + 11, width - 14);
+  drawSectionTitle(pdf, "知识缺口摘要", "需要补充知识库或规则的高频问题，完整明细保留在 Excel。", x + 7, y + 11, width - 14);
   if (!gaps.length) {
     setText(pdf, PDF.muted);
     pdf.setFontSize(9);
@@ -385,7 +385,7 @@ function drawClosureCard(pdf, data, x, y, width, height) {
   ];
   const total = Math.max(closure.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
   const max = Math.max(...closure.map((item) => safeNumber(item.count)), 1);
-  drawSectionTitle(pdf, "闭环状态", "与网页闭环卡片同步：AI 自助解决、人工已解决、处理中。", x + 7, y + 12, width - 14);
+  drawSectionTitle(pdf, "闭环状态", "AI 自助解决=AI 完成闭环；人工已解决=客服关闭工单；处理中=尚未闭环。", x + 7, y + 12, width - 14);
   closure.forEach((item, index) => {
     const rowY = y + 34 + index * 13;
     setText(pdf, PDF.ink);
@@ -521,7 +521,7 @@ export async function exportPdf(data, range, raw = {}, options = {}) {
     pdf,
     "闭环状态与人工处理",
     `统计周期 ${reportRange(range)}`,
-    "数据口径：AI 自助解决率 = AI 自助解决会话 / 区间会话；转人工率 = 人工工单数 / 会话量；闭环状态按会话最终流向统计。报告按北京时间生成，导出数据已脱敏，表格明细会保留完整记录。"
+    "数据口径与页面一致：默认不选日期时统计全部数据；知识缺口在 PDF 中仅展示摘要，Excel 保留完整明细。"
   );
   drawClosureCard(pdf, data, 12, page2StartY, 186, 70);
   drawTicketExamples(pdf, raw, 12, page2StartY + 82, 186, 74);
