@@ -1212,3 +1212,61 @@ button:disabled { cursor: not-allowed; opacity: .5; }
     min-width: 0;
   }
 }
+
+/* v2.1 agent reply composer alignment */
+.agent-composer.inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 0;
+}
+.agent-input-wrap {
+  display: grid;
+  grid-template-rows: auto 14px;
+  gap: 6px;
+  min-width: 0;
+}
+.agent-composer.inline textarea {
+  width: 100%;
+  min-height: 72px;
+  max-height: 140px;
+  padding: 12px 14px;
+  border: 1px solid #cfdcd6;
+  border-radius: 12px;
+  outline: 0;
+  line-height: 1.55;
+  resize: vertical;
+  box-shadow: none;
+}
+.agent-composer.inline textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(11, 114, 88, .1);
+}
+.agent-input-wrap small {
+  height: 14px;
+  padding-left: 14px;
+  color: #87938e;
+  font-size: 10px;
+  line-height: 14px;
+}
+.agent-composer.inline button,
+.agent-composer.inline.locked button {
+  align-self: center;
+  width: 74px;
+  min-width: 74px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 0 13px;
+}
+@media (max-width: 760px) {
+  .agent-composer.inline {
+    grid-template-columns: 1fr;
+  }
+  .agent-composer.inline button,
+  .agent-composer.inline.locked button {
+    width: 100%;
+    min-width: 0;
+  }
+}
