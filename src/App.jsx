@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 
 const QUICK_PROMPTS = [
@@ -42,12 +42,15 @@ function CustomerPage() {
   const listRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
   const lastMessageCountRef = useRef(0);
+  const forceScrollRef = useRef(false);
   const scrollToBottom = (behavior = "smooth") => {
     const list = listRef.current;
     if (!list) return;
-    requestAnimationFrame(() => {
+    const scroll = () => {
       list.scrollTo({ top: list.scrollHeight, behavior });
-    });
+    };
+    if (behavior === "auto") scroll();
+    else requestAnimationFrame(scroll);
   };
   const rememberScrollIntent = () => {
     const list = listRef.current;
@@ -113,12 +116,14 @@ function CustomerPage() {
     return () => clearInterval(timer);
   }, [session?.id, session?.status, busyMode]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const count = messages.length;
     const hasNewMessage = count > lastMessageCountRef.current;
+    const forceScroll = forceScrollRef.current;
     lastMessageCountRef.current = count;
-    if (!hasNewMessage && busyMode) return;
-    if (shouldStickToBottomRef.current || count <= 1) scrollToBottom("smooth");
+    forceScrollRef.current = false;
+    if (!hasNewMessage && busyMode && !forceScroll) return;
+    if (forceScroll || shouldStickToBottomRef.current || count <= 1) scrollToBottom(forceScroll ? "auto" : "smooth");
   }, [messages, busyMode]);
 
   async function startNewSession() {
@@ -133,6 +138,7 @@ function CustomerPage() {
       const data = await api.createSession();
       localStorage.setItem("yanxi_session_id", data.session.id);
       setSession(data.session);
+      forceScrollRef.current = true;
       setMessages(data.messages);
       setDecision(decisionFromMessages(data.messages));
     } catch (error) {
@@ -154,9 +160,8 @@ function CustomerPage() {
     const clientMessageId = crypto.randomUUID();
     setInput("");
     shouldStickToBottomRef.current = true;
+    forceScrollRef.current = true;
     setMessages((old) => [...old, { id: clientMessageId, role: "user", content: value, createdAt: beijingNow(), localStatus: "sending" }]);
-    scrollToBottom("auto");
-    setTimeout(() => scrollToBottom("auto"), 0);
     setBusyMode(sendToAgent ? "agent" : "ai");
     setDecision(sendToAgent ? humanDecision(session) : { phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
 
@@ -167,9 +172,9 @@ function CustomerPage() {
         { mode: sendToAgent ? "agent" : "ai" }
       );
       setSession(data.session);
+      forceScrollRef.current = true;
       setMessages(data.messages);
       setDecision(sendToAgent ? humanDecision(data.session) : (decisionFromMessages(data.messages) || decisionFromResult(data.decision)));
-      scrollToBottom("auto");
     } catch (error) {
       setMessages((old) => old.map((message) => message.id === clientMessageId ? { ...message, localStatus: "failed" } : message).concat({ id: crypto.randomUUID(), role: "system", content: `发送失败：${error.message}` }));
     } finally {
