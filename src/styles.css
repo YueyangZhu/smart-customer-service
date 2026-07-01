@@ -392,9 +392,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .timeline .bubble { max-width: min(760px, 72vw); padding: 11px 14px; font-size: 13px; line-height: 1.6; }
 .timeline .meta { margin-top: 5px; }
 .agent-composer.inline { display: flex; align-items: stretch; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; background: #fff; }
-.agent-input-wrap { position: relative; flex: 1; min-width: 0; display: flex; min-height: 76px; }
-.agent-composer.inline textarea { flex: 1; min-height: 76px; max-height: 140px; padding: 12px 14px 28px; line-height: 1.55; resize: vertical; }
-.agent-input-wrap small { position: absolute; left: 14px; bottom: 7px; color: #89958f; font-size: 10px; pointer-events: none; }
+.agent-input-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.agent-composer.inline textarea { flex: 1; min-height: 82px; max-height: 150px; padding: 12px 14px; line-height: 1.55; resize: vertical; }
+.agent-input-wrap small { color: #89958f; font-size: 10px; line-height: 1; padding-left: 14px; pointer-events: none; }
 .agent-composer.inline button { align-self: stretch; min-width: 108px; border: 0; border-radius: 12px; font-weight: 900; padding: 0 18px; }
 .agent-composer.inline.locked button { background: #c6d4ce !important; }
 
@@ -432,9 +432,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .timeline-heading { margin-top: 8px; }
 .timeline { min-height: 310px; }
 .agent-composer.inline { align-items: stretch; gap: 8px; padding-top: 8px; }
-.agent-composer.inline textarea { min-height: 76px; max-height: 140px; padding: 12px 14px 28px; line-height: 1.55; }
-.agent-composer.inline button { align-self: stretch; min-width: 74px; min-height: 76px; border-radius: 10px; padding: 0 13px; }
-.agent-composer.inline.locked button { min-height: 76px; }
+.agent-composer.inline textarea { min-height: 82px; max-height: 150px; padding: 12px 14px; line-height: 1.55; }
+.agent-composer.inline button { align-self: stretch; min-width: 74px; min-height: 82px; border-radius: 10px; padding: 0 13px; }
+.agent-composer.inline.locked button { min-height: 82px; }
 @media (max-width: 1100px) { .ticket-context.compact { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .chat-progress { padding: 8px 16px; } .ticket-context.compact { grid-template-columns: 1fr; } }
 
