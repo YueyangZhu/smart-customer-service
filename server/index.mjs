@@ -443,6 +443,7 @@ app.post("/api/chat", async (req, res, next) => {
     }
     const answer = await businessAnswer(result, aiAnswer);
     if (result.needHandoff && !session.ticketId) {
+      await addMessage(sessionId, "assistant", answer, result);
       await createTicket(session, result, text);
     } else {
       await addMessage(sessionId, "assistant", answer, result);
@@ -522,6 +523,7 @@ app.post("/api/agent/tickets/:id/close", async (req, res, next) => {
     const ticket = await store.getTicket(req.params.id);
     if (!ticket) return res.status(404).json({ message: "工单不存在" });
     if (ticket.status !== "processing") return res.status(409).json({ message: "请先接入会话，再关闭工单" });
+    await addMessage(ticket.sessionId, "agent", "客服已结束本次会话，如需继续咨询请新建会话。", { intent: "服务结束", source: "人工客服", action: "new_session", riskLevel: "low" });
     const updated = await store.updateTicket(ticket.id, { status: "closed", closedAt: now() });
     await store.updateSession(ticket.sessionId, { status: "closed" });
     res.json({ ticket: updated });

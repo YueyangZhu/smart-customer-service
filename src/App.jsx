@@ -156,6 +156,7 @@ function CustomerPage() {
     shouldStickToBottomRef.current = true;
     setMessages((old) => [...old, { id: clientMessageId, role: "user", content: value, createdAt: beijingNow(), localStatus: "sending" }]);
     scrollToBottom("auto");
+    setTimeout(() => scrollToBottom("auto"), 0);
     setBusyMode(sendToAgent ? "agent" : "ai");
     setDecision(sendToAgent ? humanDecision(session) : { phase: "submitting", intent: "正在接收问题", confidence: null, source: "消息通道", action: "保存用户消息", riskLevel: "" });
 
@@ -212,7 +213,8 @@ function CustomerPage() {
         if (next) { setSession(next.session); setMessages(next.messages || []); setDecision(decisionFromMessages(next.messages || [])); return; }
         return api.getSession(session.id).then((d) => { setSession(d.session); setMessages(d.messages); setDecision(decisionFromMessages(d.messages)); });
       }} />}
-      {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>继续咨询请开启一个新的会话。</span><button onClick={startNewSession} disabled={isBusy}>新建会话</button></div>}
+      {humanMode && <HandoffBanner session={session} />}
+      {isClosed && <div className="closed-session"><strong>本次服务已结束</strong><span>{closedByAgent(messages) ? "客服已结束会话，继续咨询请开启一个新的会话。" : "继续咨询请开启一个新的会话。"}</span><button onClick={startNewSession} disabled={isBusy}>新建会话</button></div>}
       {!humanMode && <div className="quick-row">{QUICK_PROMPTS.map(([label, text]) => <button key={label} disabled={!canUseQuick} onClick={() => send(text)}>{label}</button>)}</div>}
       <form className={`composer ${isClosed ? "closed" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
         <textarea disabled={!canType} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={composerPlaceholder({ isClosed, humanMode, busyMode })} rows="2" />
@@ -410,7 +412,7 @@ function AgentPage() {
       <section className="summary compact-summary"><small>AI 摘要</small><p>{selected.summary}</p></section>
       <div className="timeline-heading"><b>对话时间线</b><span>{selected.messages?.length || 0} 条消息</span></div>
       <div className="timeline" ref={timelineRef}>{selected.messages?.map((m) => <Message key={m.id} message={m} />)}</div>
-      <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复，Enter 发送…"} /><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送</button></div>
+      <div className={`agent-composer inline ${selected.status !== "processing" ? "locked" : ""}`}><div className="agent-input-wrap"><textarea disabled={selected.status !== "processing"} value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }} placeholder={selected.status === "open" ? "先接入会话后回复" : selected.status === "closed" ? "工单已关闭" : "输入人工回复"} /><small>Enter 发送 / Shift+Enter 换行</small></div><button className="primary" disabled={selected.status !== "processing" || !reply.trim()} onClick={sendReply}>发送</button></div>
     </> : <div className="empty">当前筛选下没有需要处理的工单</div>}</section>
     {confirmClose && <div className="modal-backdrop"><div className="modal confirm-modal">
       <p className="eyebrow">CLOSE TICKET</p>
@@ -488,6 +490,9 @@ function humanDecision(session) {
 }
 function closedDecision() {
   return { intent: "服务已结束", confidence: 1, source: "服务闭环", action: "new_session", riskLevel: "low" };
+}
+function closedByAgent(messages = []) {
+  return messages.some((item) => item.role === "agent" && /\u5ba2\u670d\u5df2\u7ed3\u675f/.test(item.content || ""));
 }
 function decisionFromMessages(messages = []) {
   const message = [...messages].reverse().find((item) => item.role === "assistant" && item.intent);

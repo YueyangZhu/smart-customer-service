@@ -392,7 +392,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .timeline .bubble { max-width: min(760px, 72vw); padding: 11px 14px; font-size: 13px; line-height: 1.6; }
 .timeline .meta { margin-top: 5px; }
 .agent-composer.inline { display: flex; align-items: stretch; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; background: #fff; }
-.agent-composer.inline textarea { flex: 1; min-height: 48px; max-height: 92px; padding: 12px 14px; resize: none; }
+.agent-input-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.agent-composer.inline textarea { flex: 1; min-height: 58px; max-height: 104px; padding: 12px 14px 24px; resize: none; }
+.agent-input-wrap small { position: absolute; left: 14px; bottom: 7px; color: #89958f; font-size: 10px; pointer-events: none; }
 .agent-composer.inline button { align-self: stretch; min-width: 108px; border: 0; border-radius: 12px; font-weight: 900; padding: 0 18px; }
 .agent-composer.inline.locked button { background: #c6d4ce !important; }
 
