@@ -208,9 +208,34 @@ function drawTextBlock(pdf, text, x, y, width, options = {}) {
   const fontSize = options.fontSize || 9;
   const lineHeight = options.lineHeight || fontSize * 0.48;
   pdf.setFontSize(fontSize);
-  const lines = pdf.splitTextToSize(String(text || ""), width);
+  const lines = wrapTextToWidth(pdf, text, width, options.maxLines);
   pdf.text(lines, x, y, { lineHeightFactor: 1.25 });
   return y + Math.max(lines.length, 1) * lineHeight;
+}
+
+function wrapTextToWidth(pdf, text, width, maxLines) {
+  const source = String(text || "").replace(/\s+/g, " ").trim();
+  if (!source) return [""];
+  const lines = [];
+  let line = "";
+  for (const char of source) {
+    const candidate = line + char;
+    if (line && pdf.getTextWidth(candidate) > width) {
+      lines.push(line.trimEnd());
+      line = char.trimStart();
+      if (maxLines && lines.length >= maxLines) break;
+    } else {
+      line = candidate;
+    }
+  }
+  if (!maxLines || lines.length < maxLines) lines.push(line.trimEnd());
+  if (maxLines && lines.length > maxLines) lines.length = maxLines;
+  if (maxLines && lines.length === maxLines && pdf.getTextWidth(lines[lines.length - 1]) > width) {
+    let last = lines[lines.length - 1];
+    while (last.length > 1 && pdf.getTextWidth(`${last}...`) > width) last = last.slice(0, -1);
+    lines[lines.length - 1] = `${last}...`;
+  }
+  return lines;
 }
 
 function drawCard(pdf, x, y, width, height, options = {}) {
@@ -379,9 +404,9 @@ function drawRecommendationCard(pdf, item, index, x, y, width, height) {
   pdf.text(String(index + 1), x + 11.5, y + 14.2, { align: "center" });
   setText(pdf, PDF.ink);
   pdf.setFontSize(10);
-  pdf.text(item.title, x + 21, y + 12.6);
+  pdf.text(item.title, x + 22, y + 12.6);
   setText(pdf, PDF.muted);
-  drawTextBlock(pdf, item.text, x + 21, y + 20.5, width - 29, { fontSize: 8, lineHeight: 4.1 });
+  drawTextBlock(pdf, item.text, x + 22, y + 20.5, width - 33, { fontSize: 8, lineHeight: 4.1, maxLines: 4 });
 }
 
 function drawTicketExamples(pdf, raw, x, y, width, height) {
@@ -426,19 +451,25 @@ function drawHeader(pdf, data, range) {
   pdf.text(`数据已脱敏 · 会话 ${metrics.sessions || 0} 次 · 消息 ${metrics.messages || 0} 条`, x + cardWidth - 8, y + 31, { align: "right" });
 }
 
-function drawSubHeader(pdf, title, subtitle) {
+function drawSubHeader(pdf, title, subtitle, note) {
   const { width } = pageSize(pdf);
   drawPageBackground(pdf);
-  setFill(pdf, PDF.ink);
-  pdf.rect(0, 0, width, 24, "F");
-  setText(pdf, PDF.white);
-  pdf.setFontSize(14);
-  pdf.text(title, 12, 15.5);
+  setText(pdf, PDF.ink);
+  pdf.setFontSize(16);
+  pdf.text(title, 12, 19);
   if (subtitle) {
-    setText(pdf, [213, 222, 218]);
-    pdf.setFontSize(7.8);
-    pdf.text(subtitle, width - 12, 15.5, { align: "right" });
+    setText(pdf, PDF.muted);
+    pdf.setFontSize(8);
+    pdf.text(subtitle, 12, 30);
   }
+  let nextY = subtitle ? 39 : 32;
+  if (note) {
+    setText(pdf, PDF.muted);
+    nextY = drawTextBlock(pdf, note, 12, 39, width - 24, { fontSize: 7.8, lineHeight: 3.8, maxLines: 2 }) + 4;
+  }
+  setDraw(pdf, PDF.line);
+  pdf.line(12, nextY, width - 12, nextY);
+  return nextY + 10;
 }
 
 function addFooters(pdf) {
@@ -479,19 +510,20 @@ export async function exportPdf(data, range, raw = {}, options = {}) {
   drawKnowledgeCard(pdf, data, 12, 210, 186, 68);
 
   pdf.addPage();
-  drawSubHeader(pdf, "闭环状态与人工处理", `统计周期 ${reportRange(range)}`);
-  drawClosureCard(pdf, data, 12, 36, 186, 70);
-  drawTicketExamples(pdf, raw, 12, 116, 186, 74);
-  drawCard(pdf, 12, 204, 186, 52, { fill: [250, 252, 251] });
-  drawSectionTitle(pdf, "数据口径", "所有核心指标与运营洞察页面保持一致，Excel 保留完整明细。", 19, 218, 172);
-  setText(pdf, PDF.muted);
-  drawTextBlock(pdf, "AI 自助解决率 = AI 自助解决会话 / 区间会话；转人工率 = 人工工单数 / 会话量；闭环状态按会话最终流向统计。报告按北京时间生成，导出数据已脱敏。", 19, 234, 172, { fontSize: 8.2, lineHeight: 4.2 });
+  const page2StartY = drawSubHeader(
+    pdf,
+    "闭环状态与人工处理",
+    `统计周期 ${reportRange(range)}`,
+    "数据口径：AI 自助解决率 = AI 自助解决会话 / 区间会话；转人工率 = 人工工单数 / 会话量；闭环状态按会话最终流向统计。报告按北京时间生成，导出数据已脱敏，表格明细会保留完整记录。"
+  );
+  drawClosureCard(pdf, data, 12, page2StartY, 186, 70);
+  drawTicketExamples(pdf, raw, 12, page2StartY + 82, 186, 74);
 
   pdf.addPage();
-  drawSubHeader(pdf, "运营建议", "从知识缺口、意图分布、人工工单和评价中提炼下一步动作");
+  const page3StartY = drawSubHeader(pdf, "运营建议", "从知识缺口、意图分布、人工工单和评价中提炼下一步动作");
   const advice = recommendations(data, raw);
   advice.forEach((item, index) => {
-    drawRecommendationCard(pdf, item, index, 12, 36 + index * 52, 186, 44);
+    drawRecommendationCard(pdf, item, index, 10, page3StartY + index * 48, 190, 41);
   });
 
   addFooters(pdf);
