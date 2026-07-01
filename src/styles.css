@@ -1527,14 +1527,16 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .analytics-grid article.intent-card,
 .analytics-grid article.knowledge-card {
-  min-height: 318px;
-  max-height: 318px;
-  overflow: hidden;
+  min-height: 346px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
 }
 .knowledge-card .gap-list.compact-list.scroll-list {
-  max-height: 250px;
+  max-height: 262px;
   overflow-y: auto;
   padding-right: 8px;
+  padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: #8fb2a6 #eef4f1;
 }
@@ -1555,6 +1557,32 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .info-title .info-tip::after {
   width: 320px;
 }
+.analytics-grid article.intent-card .info-tip::after {
+  left: 0;
+  transform: translate(0, 4px);
+}
+.analytics-grid article.intent-card .info-tip:hover::after,
+.analytics-grid article.intent-card .info-tip:focus-visible::after {
+  transform: translate(0, 0);
+}
+.analytics-grid article.knowledge-card .info-tip::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+.analytics-grid article.knowledge-card .info-tip:hover::after,
+.analytics-grid article.knowledge-card .info-tip:focus-visible::after {
+  transform: translate(0, 0);
+}
+.intent-layout {
+  flex: 1;
+  min-height: 244px;
+  align-items: center;
+  padding-bottom: 8px;
+}
+.knowledge-card .gap-list.compact-list {
+  flex: 1;
+}
 @media (max-width: 760px) {
   .agent-composer.inline.composer button,
   .agent-composer.inline.composer.locked button {
@@ -1566,5 +1594,6 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .analytics-grid article.intent-card,
   .analytics-grid article.knowledge-card {
     max-height: none;
+    min-height: 0;
   }
 }
