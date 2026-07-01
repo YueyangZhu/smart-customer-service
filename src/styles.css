@@ -728,13 +728,11 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto auto;
-  grid-template-areas:
-    "dates actions"
-    "note note";
+  grid-template-areas: "dates actions";
   align-items: end;
   justify-items: end;
   column-gap: 14px;
-  row-gap: 7px;
+  row-gap: 0;
 }
 .analytics .date-range {
   grid-area: dates;
@@ -762,6 +760,36 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   border-radius: 10px;
   white-space: nowrap;
 }
+.analytics .export-actions button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.analytics .export-actions button:first-child {
+  width: 108px;
+}
+.analytics .export-actions button.primary {
+  width: 138px;
+}
+.analytics .export-actions button.is-loading:disabled {
+  opacity: 1;
+  cursor: wait;
+}
+.analytics .export-actions button.is-loading span {
+  transform: translateX(-7px);
+}
+.analytics .export-actions button i {
+  position: absolute;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: exportButtonSpin .7s linear infinite;
+}
+@keyframes exportButtonSpin { to { transform: rotate(360deg); } }
 .analytics .report-tools small {
   grid-area: note;
   max-width: 100%;
@@ -843,8 +871,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
     grid-template-columns: 1fr;
     grid-template-areas:
       "dates"
-      "actions"
-      "note";
+      "actions";
   }
   .analytics .export-actions {
     width: 100%;

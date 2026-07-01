@@ -426,7 +426,6 @@ function AnalyticsPage() {
   const [from, setFrom] = useState(() => beijingDate(-29));
   const [to, setTo] = useState(() => beijingDate());
   const [exporting, setExporting] = useState("");
-  const [notice, setNotice] = useState("");
   const fromInputRef = useRef(null), toInputRef = useRef(null);
   useEffect(() => {
     const refresh = () => api.dashboard({ from, to }).then(setData).catch(() => null);
@@ -435,12 +434,14 @@ function AnalyticsPage() {
     return () => clearInterval(timer);
   }, [from, to]);
   async function downloadExcel() {
-    try { setExporting("excel"); setNotice(""); const [{ exportExcel }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportExcel(raw, data || {}); setNotice("Excel 明细已生成"); }
-    catch (error) { setNotice(error.message || "Excel 导出失败"); } finally { setExporting(""); }
+    if (exporting) return;
+    try { setExporting("excel"); const [{ exportExcel }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportExcel(raw, data || {}); }
+    catch (error) { window.alert(error.message || "Excel 导出失败"); } finally { setExporting(""); }
   }
   async function downloadPdf() {
-    try { setExporting("pdf"); setNotice(""); const [{ exportPdf }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportPdf(data || {}, { from, to }, raw); setNotice("PDF 报告已生成"); }
-    catch (error) { setNotice(error.message || "PDF 生成失败"); } finally { setExporting(""); }
+    if (exporting) return;
+    try { setExporting("pdf"); const [{ exportPdf }, raw] = await Promise.all([import("./exports.js"), api.exportData({ from, to })]); await exportPdf(data || {}, { from, to }, raw); }
+    catch (error) { window.alert(error.message || "PDF 生成失败"); } finally { setExporting(""); }
   }
   const metrics = data?.metrics || {};
   const cards = [["区间会话", metrics.sessions, "次"], ["AI 自助解决率", metrics.solveRate, "%"], ["转人工率", metrics.handoffRate, "%"], ["满意度", metrics.satisfaction, "/5"]];
@@ -458,7 +459,7 @@ function AnalyticsPage() {
   const intentDonut = topIntents.length ? `conic-gradient(${topIntents.map((item, index) => { const start = intentAngle; intentAngle += Number(item.count || 0) / intentTotal * 360; return `${intentColors[index % intentColors.length]} ${start}deg ${intentAngle}deg`; }).join(",")})` : "conic-gradient(#d8dedb 0deg 360deg)";
   const leadingIntent = topIntents[0];
   return <main className="analytics"><div className="analytics-heading"><div className="page-title"><p className="eyebrow">SERVICE INTELLIGENCE</p><h1>运营洞察</h1><p>从每一次服务中，找到下一次优化的方向。</p></div>
-    <div className="report-tools"><div className="date-range"><label onClick={() => fromInputRef.current?.showPicker?.()}>开始日期<input ref={fromInputRef} type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label><span>至</span><label onClick={() => toInputRef.current?.showPicker?.()}>结束日期<input ref={toInputRef} type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label></div><div className="export-actions"><button disabled={Boolean(exporting) || !data} onClick={downloadExcel}>{exporting === "excel" ? "正在生成…" : "导出 Excel"}</button><button className="primary" disabled={Boolean(exporting) || !data} onClick={downloadPdf}>{exporting === "pdf" ? "正在生成…" : "生成 PDF 报告"}</button></div><small>{notice || "按北京时间统计，导出数据自动隐藏用户身份标识"}</small></div></div>
+    <div className="report-tools"><div className="date-range"><label onClick={() => fromInputRef.current?.showPicker?.()}>开始日期<input ref={fromInputRef} type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label><span>至</span><label onClick={() => toInputRef.current?.showPicker?.()}>结束日期<input ref={toInputRef} type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label></div><div className="export-actions"><button className={exporting === "excel" ? "is-loading" : ""} aria-busy={exporting === "excel"} disabled={!data || exporting === "excel"} onClick={downloadExcel}><span>导出 Excel</span>{exporting === "excel" && <i />}</button><button className={`primary ${exporting === "pdf" ? "is-loading" : ""}`} aria-busy={exporting === "pdf"} disabled={!data || exporting === "pdf"} onClick={downloadPdf}><span>生成 PDF 报告</span>{exporting === "pdf" && <i />}</button></div></div></div>
     <section className="metric-grid">{cards.map(([label, value, unit]) => <article key={label}><span>{label}</span><strong>{value ?? "--"}<small>{unit}</small></strong></article>)}</section>
     <section className="analytics-grid"><article className="intent-card"><InfoTitle title="意图分布 Top 5" tip="按 AI 最终识别的售后意图统计。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="intent-layout"><div className="intent-ring-wrap"><div className="intent-ring" style={{ background: intentDonut }}><span><b>{leadingIntent ? Math.round(Number(leadingIntent.count || 0) / intentTotal * 100) : 0}%</b><small>{leadingIntent?.name || "暂无意图"}</small></span></div><em>主意图占比</em></div><div className="intent-list">{topIntents.map((x, index) => <div className="intent-item" key={x.name}><i style={{ background: intentColors[index % intentColors.length] }}>{index + 1}</i><span>{x.name}<small>{Math.round(Number(x.count || 0) / intentTotal * 100)}%</small></span><div><b style={{ width: `${Math.round(Number(x.count || 0) / intentTotal * 100)}%`, background: intentColors[index % intentColors.length] }} /></div><strong>{x.count}</strong></div>)}</div></div></article>
       <article><InfoTitle title="知识缺口 Top 5" tip="AI 无法从现有知识库获得可靠答案、需要人工补充的问题。页面展示前 5 项，完整明细保留在导出数据中。" /><div className="gap-list compact-list">{topKnowledgeGaps.map((x) => <div key={x.question}><span>{x.question}</span><b>{x.count} 次</b></div>)}</div></article>
