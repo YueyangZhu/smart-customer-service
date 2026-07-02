@@ -259,20 +259,21 @@ function drawMetricCard(pdf, item, x, y, width, height) {
   drawCard(pdf, x, y, width, height);
   pdf.setFont("SimHei", "normal");
   setText(pdf, PDF.muted);
-  pdf.setFontSize(8.5);
+  pdf.setFontSize(8.8);
   pdf.text(item.label, x + 6, y + 8.5);
   const valueText = String(item.value ?? "--");
   const valueX = x + 6;
   pdf.setFont("helvetica", "normal");
   setText(pdf, item.tone || PDF.ink);
-  pdf.setFontSize(20);
-  pdf.text(valueText, valueX, y + 22);
+  pdf.setFontSize(21);
+  pdf.text(valueText, valueX, y + 22.5);
+  const valueWidth = pdf.getTextWidth(valueText);
   pdf.setFont("SimHei", "normal");
   setText(pdf, PDF.muted);
-  pdf.setFontSize(8);
-  const unitOffset = Math.max(8, Math.min(28, valueText.length * 5.2 + (valueText.includes(".") ? 1.5 : 0)));
-  if (item.unit) pdf.text(item.unit, valueX + unitOffset, y + 21.5);
-
+  pdf.setFontSize(8.2);
+  const unitOffset = Math.max(6, Math.min(22, valueWidth + 1.2));
+  if (item.unit) pdf.text(item.unit, valueX + unitOffset, y + 22);
+  if (item.note) drawTextBlock(pdf, item.note, x + 6, y + 29.5, width - 12, { fontSize: 7.4, lineHeight: 3.5, maxLines: 1 });
 }
 
 function drawMetricNotes(pdf, x, y, width) {
@@ -358,23 +359,23 @@ function drawIntentCard(pdf, data, x, y, width, height) {
 function drawKnowledgeCard(pdf, data, x, y, width, height) {
   drawCard(pdf, x, y, width, height);
   const gaps = (data.knowledgeGaps || []).slice(0, 5);
-  drawSectionTitle(pdf, "3. 知识缺口 Top 5", "", x + 7, y + 12, width - 14);
+  drawSectionTitle(pdf, "3. 知识缺口 Top 5", "AI 暂无法可靠回答、需要补充到知识库的问题。", x + 7, y + 12, width - 14);
   if (!gaps.length) {
     setText(pdf, PDF.muted);
-    pdf.setFontSize(9);
-    pdf.text("当前周期暂无知识缺口", x + 7, y + 36);
+    pdf.setFontSize(9.2);
+    pdf.text("当前周期暂无知识缺口", x + 7, y + 38);
     return;
   }
   gaps.forEach((item, index) => {
-    const rowY = y + 29 + index * 9.2;
+    const rowY = y + 29 + index * 7.8;
     setFill(pdf, index === 0 ? PDF.lightGreen : [246, 249, 247]);
-    pdf.roundedRect(x + 7, rowY - 5.8, width - 14, 8.4, 2.3, 2.3, "F");
+    pdf.roundedRect(x + 7, rowY - 5.7, width - 14, 7.4, 2, 2, "F");
     setText(pdf, PDF.ink);
-    pdf.setFontSize(8.2);
-    pdf.text(clipText(item.question, 48), x + 11, rowY - 0.7);
+    pdf.setFontSize(8.3);
+    pdf.text(clipText(item.question, 48), x + 11, rowY - 0.8);
     setText(pdf, PDF.deepGreen);
-    pdf.setFontSize(8.2);
-    pdf.text(`${item.count} 次`, x + width - 11, rowY - 0.7, { align: "right" });
+    pdf.setFontSize(8.3);
+    pdf.text(`${item.count} 次`, x + width - 11, rowY - 0.8, { align: "right" });
   });
 }
 
@@ -388,53 +389,53 @@ function drawClosureCard(pdf, data, x, y, width, height) {
   ];
   const total = Math.max(closure.reduce((sum, item) => sum + safeNumber(item.count), 0), 1);
   const max = Math.max(...closure.map((item) => safeNumber(item.count)), 1);
-  drawSectionTitle(pdf, "4.1 闭环状态", "", x + 7, y + 12, width - 14);
+  drawSectionTitle(pdf, "4.1 闭环状态", "AI 自助解决、人工已解决、处理中三类闭环结果。", x + 7, y + 12, width - 14);
   closure.forEach((item, index) => {
-    const rowY = y + 33 + index * 13.5;
+    const rowY = y + 34 + index * 12;
     setText(pdf, PDF.ink);
-    pdf.setFontSize(9);
+    pdf.setFontSize(9.2);
     pdf.text(item.name, x + 10, rowY);
     drawBar(pdf, x + 58, rowY - 3.6, width - 130, safeNumber(item.count), max, CLOSURE_COLORS[index % CLOSURE_COLORS.length], 4.6);
     setText(pdf, PDF.ink);
-    pdf.setFontSize(8.3);
+    pdf.setFontSize(8.4);
     pdf.text(`${item.count} 个`, x + width - 64, rowY, { align: "right" });
     setText(pdf, PDF.muted);
     pdf.text(`${percent(item.count, total)}%`, x + width - 49, rowY, { align: "right" });
   });
-  drawDonut(pdf, closure, x + width - 25, y + 45, 16, CLOSURE_COLORS, { value: total, label: "会话", size: 13 });
+  drawDonut(pdf, closure, x + width - 25, y + 42, 15, CLOSURE_COLORS, { value: total, label: "会话", size: 13 });
 }
 
 function drawRecommendationCard(pdf, item, index, x, y, width, height) {
-  drawCard(pdf, x, y, width, height, { fill: index === 0 ? [242, 249, 246] : PDF.white });
+  drawCard(pdf, x, y, width, height, { fill: index === 0 ? [242, 249, 246] : PDF.white, radius: 3 });
   setFill(pdf, index === 0 ? PDF.green : PDF.ink);
-  pdf.roundedRect(x + 8, y + 8, 10, 10, 2.2, 2.2, "F");
+  pdf.roundedRect(x + 5, y + 3.7, 7.2, 7.2, 1.7, 1.7, "F");
   setText(pdf, PDF.white);
-  pdf.setFontSize(8.4);
-  pdf.text(String(index + 1), x + 13, y + 15, { align: "center" });
+  pdf.setFontSize(6.8);
+  pdf.text(String(index + 1), x + 8.6, y + 8.9, { align: "center" });
   setText(pdf, PDF.ink);
-  pdf.setFontSize(12.2);
-  pdf.text(item.title, x + 24, y + 15.2);
+  pdf.setFontSize(8.8);
+  pdf.text(item.title, x + 16, y + 8.8);
   setText(pdf, PDF.muted);
-  drawTextBlock(pdf, item.text, x + 24, y + 27, width - 34, { fontSize: 9.2, lineHeight: 4.8, maxLines: 4 });
+  drawTextBlock(pdf, item.text, x + 58, y + 8.8, width - 64, { fontSize: 7.4, lineHeight: 3.4, maxLines: 1 });
 }
 
 function drawTicketExamples(pdf, raw, x, y, width, height) {
   drawCard(pdf, x, y, width, height);
-  drawSectionTitle(pdf, "4.2 人工工单样例", "", x + 7, y + 12, width - 14);
+  drawSectionTitle(pdf, "4.2 人工工单样例", "用于复盘高风险转人工是否有明确处理结论。", x + 7, y + 12, width - 14);
   const tickets = (raw.tickets || []).slice(0, 3);
   if (!tickets.length) {
     setText(pdf, PDF.muted);
-    pdf.setFontSize(9);
-    pdf.text("当前周期暂无人工工单", x + 7, y + 36);
+    pdf.setFontSize(9.2);
+    pdf.text("当前周期暂无人工工单", x + 7, y + 38);
     return;
   }
   tickets.forEach((ticket, index) => {
-    const rowY = y + 31 + index * 20;
+    const rowY = y + 30 + index * 17;
     setText(pdf, PDF.ink);
-    pdf.setFontSize(8.8);
+    pdf.setFontSize(8.9);
     pdf.text(`${priorityText(ticket.priority)} · ${statusText(ticket.status)} · ${ticket.id}`, x + 7, rowY);
     setText(pdf, PDF.muted);
-    drawTextBlock(pdf, clipText(ticket.summary || ticket.handoffReason, 96), x + 7, rowY + 5.8, width - 14, { fontSize: 7.8, lineHeight: 3.8, maxLines: 2 });
+    drawTextBlock(pdf, clipText(ticket.summary || ticket.handoffReason, 92), x + 7, rowY + 5.4, width - 14, { fontSize: 7.9, lineHeight: 3.7, maxLines: 2 });
   });
 }
 
@@ -465,20 +466,21 @@ function drawSubHeader(pdf, title, subtitle, note) {
   drawPageBackground(pdf);
   setText(pdf, PDF.ink);
   pdf.setFontSize(16);
-  pdf.text(title, 12, 19);
+  pdf.text(title, 12, 17);
+  let lineY = 24;
   if (subtitle) {
     setText(pdf, PDF.muted);
-    pdf.setFontSize(8);
-    pdf.text(subtitle, 12, 30);
+    pdf.setFontSize(8.4);
+    pdf.text(subtitle, 12, 28);
+    lineY = 34;
   }
-  let nextY = subtitle ? 39 : 32;
   if (note) {
     setText(pdf, PDF.muted);
-    nextY = drawTextBlock(pdf, note, 12, 39, width - 24, { fontSize: 7.8, lineHeight: 3.8, maxLines: 2 }) + 4;
+    lineY = drawTextBlock(pdf, note, 12, 28, width - 24, { fontSize: 8.2, lineHeight: 3.9, maxLines: 2 }) + 4;
   }
   setDraw(pdf, PDF.line);
-  pdf.line(12, nextY, width - 12, nextY);
-  return nextY + 10;
+  pdf.line(12, lineY, width - 12, lineY);
+  return lineY + 7;
 }
 
 function addFooters(pdf) {
@@ -504,31 +506,30 @@ export async function exportPdf(data, range, raw = {}, options = {}) {
   drawHeader(pdf, data, range);
 
   const metricCards = [
-    { label: "区间会话", value: metrics.sessions ?? 0, unit: "次" },
-    { label: "AI 自助解决率", value: `${metrics.solveRate ?? 0}%`, unit: "", tone: PDF.green },
-    { label: "转人工率", value: `${metrics.handoffRate ?? 0}%`, unit: "" },
-    { label: "满意度", value: metrics.satisfaction ?? "--", unit: "/5" }
+    { label: "区间会话", value: metrics.sessions ?? 0, unit: "次", note: "进入统计范围的服务会话量" },
+    { label: "AI 自助解决率", value: `${metrics.solveRate ?? 0}%`, unit: "", tone: PDF.green, note: "AI 完成且未转人工的占比" },
+    { label: "转人工率", value: `${metrics.handoffRate ?? 0}%`, unit: "", note: "创建人工工单的会话占比" },
+    { label: "满意度", value: metrics.satisfaction ?? "--", unit: "/5", note: "用户评分均值，满分 5 分" }
   ];
-  drawSectionTitle(pdf, "1. 核心指标", "", 12, 58, 186);
+  drawSectionTitle(pdf, "1. 核心指标", "统计周期内服务规模、自动解决、转人工和用户评价。", 12, 58, 186);
   metricCards.forEach((item, index) => {
     const x = 12 + index % 2 * 95;
-    const y = 68 + Math.floor(index / 2) * 33;
-    drawMetricCard(pdf, item, x, y, 89, 29);
+    const y = 68 + Math.floor(index / 2) * 36;
+    drawMetricCard(pdf, item, x, y, 89, 34);
   });
 
-  drawIntentCard(pdf, data, 12, 135, 186, 68);
-  drawKnowledgeCard(pdf, data, 12, 207, 186, 72);
+  drawIntentCard(pdf, data, 12, 142, 186, 66);
+  drawKnowledgeCard(pdf, data, 12, 212, 186, 64);
 
   pdf.addPage();
   const page2StartY = drawSubHeader(pdf, "4. 闭环状态与人工处理", `统计周期 ${reportRange(range)}`);
   drawClosureCard(pdf, data, 12, page2StartY, 186, 68);
-  drawTicketExamples(pdf, raw, 12, page2StartY + 78, 186, 86);
+  drawTicketExamples(pdf, raw, 12, page2StartY + 76, 186, 78);
 
-  pdf.addPage();
-  const page3StartY = drawSubHeader(pdf, "5. 运营建议", `统计周期 ${reportRange(range)}`);
+  drawSectionTitle(pdf, "5. 运营建议", "按知识缺口、售后意图、人工工单和低分评价提炼下一步动作。", 12, page2StartY + 164, 186);
   const advice = recommendations(data, raw);
   advice.forEach((item, index) => {
-    drawRecommendationCard(pdf, item, index, 12, page3StartY + index * 50, 186, 44);
+    drawRecommendationCard(pdf, item, index, 12, page2StartY + 177 + index * 16, 186, 13);
   });
 
   addFooters(pdf);

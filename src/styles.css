@@ -27,7 +27,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   background: rgba(255, 255, 255, .88); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 30;
 }
-.brand { border: 0; background: transparent; display: flex; align-items: center; gap: 12px; text-align: left; color: var(--ink); }
+.brand { width: max-content; max-width: 100%; border: 0; background: transparent; display: inline-flex; align-items: center; gap: 12px; text-align: left; color: var(--ink); }
+.topbar > .brand { justify-self: start; padding: 0; }
 .brand-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--ink); color: var(--lime); font-weight: 900; }
 .brand strong, .brand small { display: block; }
 .brand strong { font-size: 15px; letter-spacing: .02em; }
@@ -1532,7 +1533,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   flex-direction: column;
 }
 .knowledge-card .gap-list.compact-list.scroll-list {
-  max-height: 250px;
+  max-height: 238px;
   overflow-y: auto;
   padding-right: 8px;
   scrollbar-width: thin;
@@ -1596,4 +1597,22 @@ button:disabled { cursor: not-allowed; opacity: .5; }
     max-height: none;
     min-height: 0;
   }
+}
+/* v2.5 fix staff header hit area and compact knowledge gaps */
+.topbar > .brand {
+  align-self: center;
+  justify-self: start;
+  width: max-content;
+}
+.analytics-grid {
+  align-items: start;
+}
+.analytics-grid article.knowledge-card {
+  align-self: start;
+  min-height: 0;
+  height: auto;
+}
+.knowledge-card .gap-list.compact-list.scroll-list {
+  flex: 0 1 auto;
+  max-height: 238px;
 }
