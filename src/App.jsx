@@ -147,9 +147,7 @@ function Header({ page, setPage, currentUser, allowedPages, onSwitchUser, onLogo
       <div className="online"><i /> 服务运行中</div>
       <div className="user-menu">
         <button className="user-trigger" type="button" onClick={() => setMenuOpen((open) => !open)}>
-          <i>{currentUser.name.slice(0, 1)}</i>
           <span><b>{currentUser.name}</b><small>{currentUser.roleName}</small></span>
-          <em>v</em>
         </button>
         {menuOpen && <div className="user-dropdown">
           <small>切换演示角色</small>

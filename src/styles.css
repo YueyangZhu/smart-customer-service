@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   color: #14212b;
   background: #f2f5f3;
@@ -16,13 +16,14 @@
 }
 
 * { box-sizing: border-box; }
+html { scrollbar-gutter: stable; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 8% 5%, #e3f0e9 0, transparent 32%), #f2f5f3; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 
 .topbar {
-  height: 76px; padding: 0 4vw; display: flex; align-items: center; justify-content: space-between;
+  height: 76px; padding: 0 4vw; display: grid; grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr); align-items: center; gap: 18px;
   background: rgba(255, 255, 255, .88); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 30;
 }
@@ -31,7 +32,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .brand strong, .brand small { display: block; }
 .brand strong { font-size: 15px; letter-spacing: .02em; }
 .brand small { color: #84918d; font-size: 8px; letter-spacing: .16em; margin-top: 3px; }
-.topbar nav { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: #f7f9f8; }
+.topbar nav { justify-self: center; display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: #f7f9f8; }
 .topbar nav button { border: 0; background: transparent; padding: 9px 18px; border-radius: 10px; color: #64716d; }
 .topbar nav button.active { background: var(--ink); color: white; box-shadow: 0 5px 14px rgba(20,33,43,.16); }
 .online { font-size: 12px; color: var(--green); font-weight: 700; }
@@ -206,7 +207,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .report-tools { min-width: 0; width: 100%; justify-items: start; }
 }
 @media (max-width: 760px) {
-  .topbar { height: auto; padding: 12px 16px; flex-wrap: wrap; gap: 10px; }
+  .topbar { height: auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; }
   .topbar nav { order: 3; width: 100%; }
   .topbar nav button { flex: 1; padding: 8px; }
   .online { display: none; }
@@ -1058,14 +1059,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .demo-users small { margin-top: 4px; color: #65736d; font-size: 11px; }
 .demo-users em { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; color: #53615b; font-style: normal; font-size: 11px; white-space: nowrap; }
 .login-note { padding: 12px; border: 1px solid #f0c66e; border-radius: 10px; background: #fffaf0; color: #8a5a10 !important; }
-.header-right { display: flex; align-items: center; gap: 18px; }
+.header-right { justify-self: end; display: flex; align-items: center; justify-content: flex-end; gap: 18px; min-width: 220px; }
 .user-menu { position: relative; }
-.user-trigger { min-width: 150px; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: var(--ink); text-align: left; }
-.user-trigger > i { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: #dfe7e3; color: #52625b; font-style: normal; font-weight: 900; }
+.user-trigger { min-width: 82px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; border: 0; background: transparent; color: var(--ink); text-align: left; }
 .user-trigger b, .user-trigger small { display: block; }
 .user-trigger b { font-size: 13px; }
 .user-trigger small { margin-top: 2px; color: #6f7c76; font-size: 11px; }
-.user-trigger em { margin-left: auto; color: #73817a; font-style: normal; }
 .user-dropdown { position: absolute; right: 0; top: calc(100% + 10px); z-index: 40; width: 210px; padding: 10px; display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 18px 45px rgba(20,33,43,.14); }
 .user-dropdown > small { padding: 7px 8px; color: #8a958f; font-size: 11px; }
 .user-dropdown button { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-radius: 9px; background: transparent; padding: 9px 8px; color: #30413a; text-align: left; }
