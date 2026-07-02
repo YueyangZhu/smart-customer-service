@@ -1605,19 +1605,19 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   width: max-content;
 }
 
-/* v2.6 keep insight cards aligned and let knowledge gaps fill available height */
+/* v2.7 keep cards at the intent-card height and scroll knowledge gaps inside */
 .analytics-grid {
-  align-items: stretch;
+  align-items: start;
 }
 .analytics-grid article.intent-card,
 .analytics-grid article.knowledge-card {
+  height: 346px;
   min-height: 346px;
-  height: 100%;
 }
 .analytics-grid article.knowledge-card {
-  align-self: stretch;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .knowledge-card .gap-list.compact-list.scroll-list {
   flex: 1 1 auto;
@@ -1625,4 +1625,11 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   max-height: none;
   overflow-y: auto;
   align-content: start;
+}
+@media (max-width: 760px) {
+  .analytics-grid article.intent-card,
+  .analytics-grid article.knowledge-card {
+    height: auto;
+    min-height: 0;
+  }
 }
