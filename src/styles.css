@@ -1532,12 +1532,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   flex-direction: column;
 }
 .knowledge-card .gap-list.compact-list.scroll-list {
-  max-height: 262px;
+  max-height: 250px;
   overflow-y: auto;
   padding-right: 8px;
-  padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: #8fb2a6 #eef4f1;
+  align-content: start;
+  grid-auto-rows: minmax(42px, auto);
 }
 .knowledge-card .gap-list.compact-list.scroll-list::-webkit-scrollbar {
   width: 7px;
@@ -1580,7 +1581,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   padding-bottom: 8px;
 }
 .knowledge-card .gap-list.compact-list {
-  flex: 1;
+  flex: 0 1 auto;
 }
 @media (max-width: 760px) {
   .agent-composer.inline.composer button,
